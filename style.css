@@ -1,0 +1,162 @@
+/* ---------- Base ---------- */
+/* Univers unique sombre (écran de jeu), indépendant du thème */
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top, #23324a, #0e1420 70%);
+  color: #f2f4f8;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+  overflow-x: hidden;
+}
+
+.jeu {
+  width: 100%;
+  max-width: 400px;
+  padding-block: 10px 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- En-tête ---------- */
+.entete {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.5px;
+}
+
+.bouton-son {
+  border: none;
+  background: #2d3b55;
+  color: #fff;
+  font-size: 1.2rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* ---------- Score ---------- */
+.tableau-bord {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  background: #182235;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.95rem;
+}
+
+.tableau-bord p {
+  margin: 0;
+}
+
+.tableau-bord strong {
+  color: #ffd23f;
+  font-size: 1.15rem;
+}
+
+/* ---------- Canvas ---------- */
+.zone-canvas {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* La taille interne reste 360 x 540 (attributs HTML) ;
+   seule la taille affichée s'adapte à l'écran. */
+canvas {
+  display: block;
+  /* jamais plus large que l'écran, ni trop haut pour laisser voir les boutons */
+  width: min(100%, 360px, calc(58vh * 2 / 3));
+  height: auto;
+  aspect-ratio: 360 / 540;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  background: #2b2b2b;
+  touch-action: none;
+}
+
+/* ---------- Boutons ---------- */
+.commandes {
+  width: 100%;
+  display: flex;
+  gap: 14px;
+}
+
+button {
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.bouton-direction {
+  flex: 1;
+  min-height: 60px;
+  font-size: 1.15rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 14px;
+  background: #3a6df0;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #2449a8;
+}
+
+.bouton-direction:active,
+.bouton-direction.actif {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #2449a8;
+}
+
+.message {
+  margin: 2px 0 0;
+  min-height: 1.4em;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: #ffd23f;
+}
+
+.message.perdu {
+  color: #ff5a5a;
+}
+
+.bouton-recommencer {
+  min-height: 50px;
+  padding: 0 32px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 25px;
+  background: #22b35e;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #167a3f;
+}
+
+.bouton-recommencer:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #167a3f;
+}

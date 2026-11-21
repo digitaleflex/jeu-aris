@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Jeu de voiture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="jeu">
+    <header class="entete">
+      <h1>Course sur 3 voies</h1>
+      <button id="boutonSon" class="bouton-son" type="button" aria-label="Couper le son">🔊</button>
+    </header>
+
+    <div class="tableau-bord">
+      <p>Score : <strong id="score">0</strong></p>
+      <p>Record : <strong id="record">0</strong></p>
+      <p>Vitesse : <strong id="vitesse">0</strong> km/h</p>
+    </div>
+
+    <div class="zone-canvas">
+      <canvas id="canvasJeu" width="360" height="540">
+        Votre navigateur ne gère pas le Canvas.
+      </canvas>
+    </div>
+
+    <div class="commandes">
+      <button id="boutonGauche" class="bouton-direction" type="button" aria-label="Gauche">◀ Gauche</button>
+      <button id="boutonDroite" class="bouton-direction" type="button" aria-label="Droite">Droite ▶</button>
+    </div>
+
+    <p id="message" class="message">Appuyez sur « Démarrer » (ou Espace) pour jouer.</p>
+    <button id="boutonRecommencer" class="bouton-recommencer" type="button">Démarrer</button>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
