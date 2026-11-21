@@ -140,7 +140,7 @@ const son = {
   contexte: null,
   general: null,       // volume général
   moteur: null,        // { osc1, osc2, filtre, gain }
-  crissement: null,    // { filtre, gain }
+  pneus: null,         // crissement des pneus (voir creerSonPneus)
   vent: null,          // { filtre, gain }
   bruitBlanc: null,
   actif: lireStockage("sonActif", "1") === "1",
@@ -169,7 +169,7 @@ function initialiserSon() {
   son.bruitBlanc = tampon;
 
   creerSonMoteur(ac);
-  son.crissement = creerBruitContinu(ac, "bandpass", 1900, 6);
+  son.pneus = creerSonPneus(ac);
   son.vent = creerBruitContinu(ac, "lowpass", 500, 0.7);
 }
 
@@ -233,10 +233,6 @@ function mettreAJourSonContinu(vitesseMs, accelerateur, accelLaterale, enMarche)
   m.filtre.frequency.setTargetAtTime(250 + regime * 0.25 + accelerateur * 600 + (nitro.actif ? 1400 : 0), t, 0.05);
   m.gain.gain.setTargetAtTime(enMarche ? 0.10 + accelerateur * 0.07 : 0, t, 0.08);
 
-  // Crissement des pneus quand l'accélération latérale dépasse ~0,9 g
-  const glisse = limiter((Math.abs(accelLaterale) - 900) / 1500, 0, 1);
-  son.crissement.gain.gain.setTargetAtTime(enMarche ? glisse * 0.18 : 0, t, 0.03);
-
   // Bruit du vent : la traînée aérodynamique varie comme v²
   const vent = limiter((vitesseMs / 50) ** 2, 0, 1);
   son.vent.gain.gain.setTargetAtTime(enMarche ? vent * 0.12 : 0, t, 0.2);
@@ -244,6 +240,138 @@ function mettreAJourSonContinu(vitesseMs, accelerateur, accelLaterale, enMarche)
 
 function couperSonsContinus() {
   mettreAJourSonContinu(0, 0, 0, false);
+}
+
+/* ---------- Crissement réaliste des pneus ----------
+   Dans la réalité, un pneu qui dérape « accroche » et « décroche » des centaines
+   de fois par seconde (phénomène d'adhérence-glissement, « stick-slip »).
+   Cela produit un sifflement presque musical (une note autour de 700-1500 Hz
+   avec ses harmoniques) qui tremble sans arrêt, mêlé à un bruit de frottement.
+   On le reproduit avec :
+     1. un bruit blanc passé dans 3 filtres très sélectifs (note + 2 harmoniques) ;
+     2. un oscillateur dont la hauteur vibre irrégulièrement (le « stick-slip ») ;
+     3. un bruit de frottement large (gomme sur l'asphalte) ;
+     4. un grondement grave (la carrosserie qui vibre).
+   Deux oscillateurs lents (LFO) font trembler la hauteur de façon irrégulière. */
+function creerSonPneus(ac) {
+  const sortie = ac.createGain();
+  sortie.gain.value = 1;
+  // Légère saturation, comme un son enregistré de près
+  const saturation = ac.createWaveShaper();
+  const courbe = new Float32Array(1024);
+  for (let i = 0; i < courbe.length; i++) {
+    const x = i / 512 - 1;
+    courbe[i] = Math.tanh(2.2 * x);
+  }
+  saturation.curve = courbe;
+  sortie.connect(saturation);
+  saturation.connect(son.general);
+
+  // Vibrato irrégulier : deux LFO de fréquences sans rapport simple
+  const lfo1 = ac.createOscillator();
+  const lfo2 = ac.createOscillator();
+  lfo1.frequency.value = 13.7;
+  lfo2.frequency.value = 4.3;
+  const profondeur1 = ac.createGain();
+  const profondeur2 = ac.createGain();
+  profondeur1.gain.value = 45;
+  profondeur2.gain.value = 70;
+  lfo1.connect(profondeur1);
+  lfo2.connect(profondeur2);
+  lfo1.start();
+  lfo2.start();
+
+  // 1. Sifflement : bruit filtré sur la note et ses harmoniques
+  const sifflement = ac.createGain();
+  sifflement.gain.value = 0;
+  sifflement.connect(sortie);
+  const bruit = ac.createBufferSource();
+  bruit.buffer = son.bruitBlanc;
+  bruit.loop = true;
+  bruit.start();
+  const harmoniques = [];
+  const volumes = [1, 0.55, 0.25];
+  for (let h = 0; h < 3; h++) {
+    const filtre = ac.createBiquadFilter();
+    filtre.type = "bandpass";
+    filtre.Q.value = 38;
+    filtre.frequency.value = 900 * (h + 1);
+    profondeur1.connect(filtre.frequency);
+    profondeur2.connect(filtre.frequency);
+    const gain = ac.createGain();
+    gain.gain.value = volumes[h] * 9; // un filtre très sélectif laisse passer peu d'énergie
+    bruit.connect(filtre);
+    filtre.connect(gain);
+    gain.connect(sifflement);
+    harmoniques.push(filtre);
+  }
+
+  // 2. Stick-slip : oscillateur à la même note, hauteur tremblante
+  const oscillateur = ac.createOscillator();
+  oscillateur.type = "sawtooth";
+  oscillateur.frequency.value = 900;
+  profondeur1.connect(oscillateur.frequency);
+  profondeur2.connect(oscillateur.frequency);
+  const filtreOsc = ac.createBiquadFilter();
+  filtreOsc.type = "bandpass";
+  filtreOsc.frequency.value = 1400;
+  filtreOsc.Q.value = 1.5;
+  const gainOsc = ac.createGain();
+  gainOsc.gain.value = 0;
+  oscillateur.connect(filtreOsc);
+  filtreOsc.connect(gainOsc);
+  gainOsc.connect(sortie);
+  oscillateur.start();
+
+  // 3. Frottement de la gomme
+  const filtreFrottement = ac.createBiquadFilter();
+  filtreFrottement.type = "bandpass";
+  filtreFrottement.frequency.value = 2500;
+  filtreFrottement.Q.value = 0.7;
+  const gainFrottement = ac.createGain();
+  gainFrottement.gain.value = 0;
+  bruit.connect(filtreFrottement);
+  filtreFrottement.connect(gainFrottement);
+  gainFrottement.connect(sortie);
+
+  // 4. Grondement grave
+  const filtreGrave = ac.createBiquadFilter();
+  filtreGrave.type = "lowpass";
+  filtreGrave.frequency.value = 160;
+  const gainGrave = ac.createGain();
+  gainGrave.gain.value = 0;
+  bruit.connect(filtreGrave);
+  filtreGrave.connect(gainGrave);
+  gainGrave.connect(sortie);
+
+  return { sifflement, harmoniques, oscillateur, gainOsc, gainFrottement, gainGrave, lfo1, lfo2 };
+}
+
+/* glisse : 0 (le pneu adhère) à 1 (dérapage complet)
+   vitesseMs : vitesse de glissement → plus on glisse vite, plus la note est aiguë */
+function mettreAJourSonPneus(glisse, vitesseMs) {
+  if (!son.contexte || !son.pneus) return;
+  const p = son.pneus;
+  const t = son.contexte.currentTime;
+  const g = limiter(glisse, 0, 1);
+
+  // La note dépend de la vitesse de glissement, avec un tremblement aléatoire
+  const note = (650 + 380 * g + vitesseMs * 6) * (0.97 + Math.random() * 0.06);
+  p.harmoniques.forEach(function (filtre, h) {
+    filtre.frequency.setTargetAtTime(note * (h + 1), t, 0.04);
+  });
+  p.oscillateur.frequency.setTargetAtTime(note, t, 0.04);
+  p.lfo1.frequency.setTargetAtTime(10 + Math.random() * 8, t, 0.1);
+
+  // Le volume « vacille » un peu, comme un vrai crissement
+  const vacillement = 0.8 + Math.random() * 0.4;
+  const fort = Math.pow(g, 1.4);
+  // Attaque rapide quand le pneu décroche, extinction plus douce quand il raccroche
+  const reaction = g > 0.02 ? 0.015 : 0.06;
+  p.sifflement.gain.setTargetAtTime(0.16 * fort * vacillement, t, reaction);
+  p.gainOsc.gain.setTargetAtTime(0.05 * fort * vacillement, t, reaction);
+  p.gainFrottement.gain.setTargetAtTime(0.12 * g * vacillement, t, reaction);
+  p.gainGrave.gain.setTargetAtTime(0.35 * g, t, 0.05);
 }
 
 // Bip simple (compte à rebours, point marqué…)
@@ -426,8 +554,11 @@ const joueur = {
   vitesse: 0,        // vitesse d'avancement (px/s)
   accelerateur: 0,   // 0 à 1
   angle: 0,          // orientation (rad)
-  rotation: 0        // vitesse de rotation pendant un accident (rad/s)
+  rotation: 0,       // vitesse de rotation pendant un accident (rad/s)
+  glisse: 0          // 0 = les pneus adhèrent, 1 = dérapage complet
 };
+
+let traces = [];     // traces de pneus laissées sur la route
 
 let obstacles = [];
 let particules = [];
@@ -453,6 +584,8 @@ function reinitialiserPartie() {
   joueur.vitesse = kmhVersPx(VITESSE_DEPART_KMH); // départ lancé
   obstacles = [];
   particules = [];
+  traces = [];
+  joueur.glisse = 0;
   distanceDepuisVague = 0;
   tremblement = 0;
   dureeAccident = 0;
@@ -704,6 +837,54 @@ function mettreAJourDirection(dt) {
   joueur.vx += ax * dt;
   joueur.x += joueur.vx * dt;
   joueur.angle = limiter(Math.atan2(joueur.vx, Math.max(joueur.vitesse, 1)), -0.5, 0.5);
+
+  // Glissement latéral : un virage serré dépasse l'adhérence des pneus
+  const glisseLaterale = limiter((Math.abs(ax) - 800) / 1500, 0, 1);
+  // Patinage : la force demandée au moteur approche la limite d'adhérence μ·m·g
+  const v = Math.max(joueur.vitesse / PX_PAR_METRE, 1);
+  const puissance = PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1);
+  const forceDemandee = joueur.accelerateur * puissance / v;
+  const patinage = limiter((forceDemandee / FORCE_ADHERENCE - 0.8) / 0.25, 0, 1);
+  lisserGlisse(Math.max(glisseLaterale, patinage), dt);
+  laisserTraces(dt);
+}
+
+function lisserGlisse(cible, dt) {
+  joueur.glisse += (cible - joueur.glisse) * Math.min(1, dt * 25);
+}
+
+/* Traces de pneus : on mémorise la position des roues arrière quand la voiture glisse.
+   Les traces sont « collées » à la route : elles descendent avec le défilement. */
+function laisserTraces(dt) {
+  if (joueur.glisse < 0.3) return;
+  const cosA = Math.cos(joueur.angle);
+  const sinA = Math.sin(joueur.angle);
+  const centreY = joueur.y + VOITURE_HAUTEUR / 2;
+  for (const cote of [-1, 1]) {
+    const lx = cote * (VOITURE_LARGEUR / 2 - 8);
+    const ly = VOITURE_HAUTEUR / 2 - 16;
+    traces.push({
+      x: joueur.x + lx * cosA - ly * sinA,
+      y: centreY + lx * sinA + ly * cosA,
+      defilementDepart: defilement,
+      opacite: 0.2 + 0.45 * joueur.glisse
+    });
+  }
+  if (traces.length > 1500) traces.splice(0, traces.length - 1500);
+}
+
+function dessinerTraces() {
+  ctx.fillStyle = "#141414";
+  for (const t of traces) {
+    const y = t.y + (defilement - t.defilementDepart);
+    if (y > HAUTEUR + 5) continue;
+    ctx.globalAlpha = t.opacite;
+    ctx.fillRect(t.x - 2.5, y - 2.5, 5, 5);
+  }
+  ctx.globalAlpha = 1;
+  traces = traces.filter(function (t) {
+    return t.y + (defilement - t.defilementDepart) < HAUTEUR + 5;
+  });
 }
 
 function mettreAJourCompteARebours(dt) {
@@ -882,6 +1063,10 @@ function ralentirParFrottement(vitesse, dt) {
 
 function mettreAJourAccident(dt) {
   dureeAccident += dt;
+  // Toute la voiture glisse : le crissement suit la vitesse de glissement
+  const vitesseGlissement = Math.hypot(joueur.vitesse, joueur.vx) + Math.abs(joueur.rotation) * 40;
+  lisserGlisse(limiter(vitesseGlissement / kmhVersPx(45), 0, 1), dt);
+  if (joueur.vitesse > 1 || Math.abs(joueur.rotation) > 0.2) laisserTraces(dt);
   joueur.vitesse = ralentirParFrottement(joueur.vitesse, dt);
   joueur.vx = ralentirParFrottement(joueur.vx, dt);
   joueur.x += joueur.vx * dt;
@@ -1099,6 +1284,7 @@ function dessinerScene() {
     ctx.translate((Math.random() - 0.5) * tremblement, (Math.random() - 0.5) * tremblement);
   }
   dessinerRoute();
+  dessinerTraces();
   for (const o of obstacles) {
     dessinerVoiture(o.image, o.x, o.y, o.angle);
   }
@@ -1430,6 +1616,11 @@ function boucle(temps) {
 
   if (etat === "compte" || etat === "jeu") {
     mettreAJourSonContinu(joueur.vitesse / PX_PAR_METRE, joueur.accelerateur, joueur.ax, true);
+  }
+  if (etat === "compte" || etat === "jeu" || etat === "accident") {
+    mettreAJourSonPneus(joueur.glisse, Math.hypot(joueur.vitesse, joueur.vx) / PX_PAR_METRE);
+  } else {
+    mettreAJourSonPneus(0, 0);
   }
   mettreAJourBoutonNitro();
 

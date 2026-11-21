@@ -51,8 +51,14 @@ PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
     par le frottement (décélération μ·g).
   - Pas de temps fixe (1/120 s) : même comportement quelle que soit la
     fréquence de l'écran.
-  - Son moteur : régime calculé avec une boîte 6 vitesses ; crissement des
-    pneus selon l'accélération latérale ; bruit du vent proportionnel à v².
+  - Son moteur : régime calculé avec une boîte 6 vitesses ; bruit du vent
+    proportionnel à v².
+  - Pneus : ils dérapent quand l'accélération latérale dépasse l'adhérence
+    ou quand la force du moteur approche μ·m·g (patinage, nitro). Le
+    crissement imite l'adhérence-glissement d'un vrai pneu (« stick-slip ») :
+    une note de 700 à 1500 Hz avec ses harmoniques, qui tremble, plus le
+    frottement de la gomme. La note baisse quand la glissade ralentit.
+    Des traces de pneus restent sur la route.
 
 FICHIERS
   index.html, style.css, script.js
