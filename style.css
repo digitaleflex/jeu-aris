@@ -162,6 +162,53 @@ button {
   box-shadow: 0 1px 0 #2449a8;
 }
 
+/* Bouton nitro : le fond se remplit selon la charge (--charge, mise à jour en JS) */
+.bouton-nitro {
+  --charge: 100%;
+  width: 72px;
+  min-height: 60px;
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: linear-gradient(to top, #ff7a1a var(--charge), #3a2a2a var(--charge));
+  box-shadow: 0 4px 0 #8a3c0c;
+}
+
+.bouton-nitro span {
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+}
+
+.bouton-nitro.pret {
+  animation: pulsation 0.8s ease-in-out infinite;
+}
+
+@keyframes pulsation {
+  50% {
+    box-shadow: 0 4px 0 #8a3c0c, 0 0 18px #ff9a3c;
+  }
+}
+
+.bouton-nitro:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #8a3c0c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bouton-nitro.pret {
+    animation: none;
+  }
+}
+
 .message {
   flex: 1;
   min-width: 0;
@@ -213,7 +260,8 @@ button {
     padding: 4px 10px;
     font-size: 0.85rem;
   }
-  .bouton-direction {
+  .bouton-direction,
+  .bouton-nitro {
     min-height: 50px;
   }
   .bouton-recommencer {
@@ -240,7 +288,7 @@ button {
     grid-template-areas:
       "entete canvas score"
       "gauche canvas droite"
-      "pied   canvas .";
+      "pied   canvas nitro";
     column-gap: 16px;
   }
   .entete { grid-area: entete; }
@@ -249,5 +297,6 @@ button {
   .commandes { display: contents; }
   #boutonGauche { grid-area: gauche; align-self: center; min-height: 90px; }
   #boutonDroite { grid-area: droite; align-self: center; min-height: 90px; }
+  #boutonNitro { grid-area: nitro; align-self: center; justify-self: center; }
   .pied { grid-area: pied; flex-direction: column; }
 }

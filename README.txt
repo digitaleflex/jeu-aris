@@ -9,19 +9,34 @@ LANCER LE JEU
 COMMANDES
   Ordinateur :  Flèche gauche / Q / A  -> voie de gauche
                 Flèche droite / D       -> voie de droite
+                Flèche haut / Z / W     -> NITRO
                 Espace ou Entrée        -> démarrer / recommencer
                 M                       -> couper / remettre le son
   Téléphone  :  Glisser le doigt vers la gauche / la droite (n'importe où
                 sur l'écran ; un long swipe peut changer de 2 voies),
                 toucher la moitié gauche / droite de la route,
                 ou les boutons « Gauche » et « Droite ».
+                Glisser vers le HAUT (ou bouton 🔥) -> NITRO
                 Le jeu s'adapte à la taille de l'écran (portrait et paysage)
                 et reste net sur les écrans haute densité.
   Bouton 🔊     -> son activé / coupé (mémorisé)
 
 RÈGLES
-  - Évitez les voitures qui arrivent : +1 point par voiture dépassée.
-  - La vitesse augmente avec le score (90 km/h au départ, 180 km/h max).
+  - Évitez les voitures qui arrivent : chaque voiture dépassée rapporte
+    1 point × le multiplicateur de combo.
+  - COMBO : toutes les 5 voitures évitées d'affilée, le multiplicateur
+    augmente (×2, ×3… jusqu'à ×5). Changer de voie alors qu'aucune voiture
+    n'arrive dans la sienne fait perdre le combo.
+  - FRÔLEMENT : dépasser une voiture en passant à moins de 16 px d'elle
+    donne +2 points, un ralenti, et recharge le nitro d'un tiers.
+  - NITRO : quand la jauge est pleine, la puissance du moteur est
+    multipliée par 2,2 pendant 3 s et les points sont doublés.
+    La jauge se recharge lentement, et vite grâce aux frôlements.
+  - JOUR / NUIT : le ciel change avec la distance (coucher de soleil, nuit,
+    aube). La nuit, seuls les phares éclairent la route ; on repère les
+    autres voitures à leurs feux arrière rouges.
+  - La vitesse augmente avec le nombre de voitures dépassées
+    (90 km/h au départ, 180 km/h max, +70 km/h avec le nitro).
   - Une collision termine la partie. Le meilleur score est conservé.
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
