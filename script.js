@@ -8,7 +8,7 @@
      3. Chargement des images
      4. Sons (Web Audio API, sons synthétisés : aucun fichier externe)
      5. État du jeu (joueur, obstacles, score…)
-     6. Commandes : clavier, boutons, écran tactile
+     6. Commandes : clavier, boutons, swipe et toucher (écran tactile)
      7. Physique : moteur, direction, trafic, collisions, accident
      8. Dessin de la scène
      9. Boucle d'animation, démarrage et fin de partie
@@ -81,7 +81,7 @@ function limiter(valeur, min, max) {
 }
 
 /* ---------- 3. Images ---------- */
-const imageRoute = chargerImage("images/route.png");
+const imageRoute = chargerImage("images/route.jpg");
 const imageJoueur = chargerImage("images/voiture-rouge.png");
 const imagesAdverses = [
   chargerImage("images/voiture-verte.png"),
@@ -432,17 +432,105 @@ boutonSon.addEventListener("click", function () {
   boutonSon.blur();
 });
 
-// Écran tactile : toucher la moitié gauche ou droite du Canvas
-canvas.addEventListener("pointerdown", function (evenement) {
+/* Écran tactile (et souris) — n'importe où sur l'écran, sauf sur les boutons :
+   - glisser le doigt vers la gauche / la droite : change de voie dès que le
+     doigt a parcouru SEUIL_SWIPE pixels (un long swipe peut enchaîner 2 voies) ;
+   - toucher brièvement le Canvas : moitié gauche → gauche, moitié droite → droite ;
+   - avant / après une partie, un toucher lance la partie. */
+const SEUIL_SWIPE = 28;      // px parcourus pour valider un swipe
+const SEUIL_TOUCHER = 12;    // au-delà, ce n'est plus un simple toucher
+const DUREE_TOUCHER = 350;   // ms
+
+let geste = null;
+
+document.addEventListener("pointerdown", function (evenement) {
+  if (evenement.target.closest("button")) return; // les boutons gardent leur rôle
+  if (geste !== null) return;                      // un seul doigt suivi à la fois
   evenement.preventDefault();
-  if (etat === "attente" || etat === "fini") {
-    lancerPartie();
-    return;
+  geste = {
+    id: evenement.pointerId,
+    departX: evenement.clientX,
+    departY: evenement.clientY,
+    referenceX: evenement.clientX, // point de départ du prochain swipe
+    debut: performance.now(),
+    aGlisse: false,
+    surCanvas: evenement.target === canvas
+  };
+}, { passive: false });
+
+document.addEventListener("pointermove", function (evenement) {
+  if (geste === null || evenement.pointerId !== geste.id) return;
+  evenement.preventDefault();
+  const dx = evenement.clientX - geste.referenceX;
+  const dy = evenement.clientY - geste.departY;
+  if (Math.abs(dx) >= SEUIL_SWIPE && Math.abs(dx) > Math.abs(dy) * 0.7) {
+    if (dx < 0) allerAGauche();
+    else allerADroite();
+    geste.aGlisse = true;
+    geste.referenceX = evenement.clientX;
   }
-  const rect = canvas.getBoundingClientRect();
-  if (evenement.clientX - rect.left < rect.width / 2) allerAGauche();
-  else allerADroite();
+}, { passive: false });
+
+document.addEventListener("pointerup", function (evenement) {
+  if (geste === null || evenement.pointerId !== geste.id) return;
+  const distance = Math.hypot(evenement.clientX - geste.departX, evenement.clientY - geste.departY);
+  const duree = performance.now() - geste.debut;
+  const simpleToucher = !geste.aGlisse && distance < SEUIL_TOUCHER && duree < DUREE_TOUCHER;
+
+  if (simpleToucher) {
+    if (etat === "attente" || etat === "fini") {
+      lancerPartie();
+    } else if (geste.surCanvas) {
+      const rect = canvas.getBoundingClientRect();
+      if (evenement.clientX - rect.left < rect.width / 2) allerAGauche();
+      else allerADroite();
+    }
+  }
+  geste = null;
 });
+
+document.addEventListener("pointercancel", function () {
+  geste = null;
+});
+
+// Empêche le menu « appui long » sur l'image du Canvas
+canvas.addEventListener("contextmenu", function (evenement) {
+  evenement.preventDefault();
+});
+
+/* ---------- Taille d'affichage et netteté ----------
+   Le jeu calcule toujours dans un repère de 360 x 540.
+   On affiche le Canvas aussi grand que possible dans sa zone (rapport 2:3 conservé),
+   puis on adapte le nombre réel de pixels à la densité de l'écran
+   (devicePixelRatio) pour que l'image reste nette sur téléphone. */
+const zoneCanvas = canvas.parentElement;
+
+function ajusterTailleCanvas() {
+  const largeurZone = zoneCanvas.clientWidth;
+  const hauteurZone = zoneCanvas.clientHeight;
+  if (largeurZone === 0 || hauteurZone === 0) return;
+
+  const largeurAffichee = Math.floor(Math.min(largeurZone, hauteurZone * LARGEUR / HAUTEUR));
+  const hauteurAffichee = Math.floor(largeurAffichee * HAUTEUR / LARGEUR);
+  canvas.style.width = largeurAffichee + "px";
+  canvas.style.height = hauteurAffichee + "px";
+
+  const densite = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(largeurAffichee * densite);
+  canvas.height = Math.round(hauteurAffichee * densite);
+  // Changer width/height réinitialise le contexte : on remet l'échelle 360 x 540
+  ctx.setTransform(canvas.width / LARGEUR, 0, 0, canvas.height / HAUTEUR, 0, 0);
+  ctx.imageSmoothingQuality = "high";
+
+  if (imagesRestantes === 0) dessinerScene();
+}
+
+if (window.ResizeObserver) {
+  new ResizeObserver(ajusterTailleCanvas).observe(zoneCanvas);
+}
+window.addEventListener("resize", ajusterTailleCanvas);
+window.addEventListener("orientationchange", ajusterTailleCanvas);
+ajusterTailleCanvas();
 
 /* ---------- 7. Physique ---------- */
 function mettreAJour(dt) {
@@ -649,6 +737,7 @@ function declencherAccident(obstacle) {
   obstacle.accidente = true;
 
   tremblement = 10;
+  vibrer([60, 40, 120]);
   creerEtincelles(joueur.x - decalage * 10, obstacle.y + VOITURE_HAUTEUR - 4, 40);
   sonAccident(vitesseImpact / 500);
   couperSonsContinus();
@@ -839,7 +928,7 @@ function dessinerTexteSurCanvas() {
     if (etat === "fini") {
       ctx.fillText("Score : " + score + "   •   Record : " + record, LARGEUR / 2, HAUTEUR / 2 - 15);
     } else {
-      ctx.fillText("← → ou boutons pour changer de voie", LARGEUR / 2, HAUTEUR / 2 - 15);
+      ctx.fillText("Glissez le doigt ← → pour changer de voie", LARGEUR / 2, HAUTEUR / 2 - 15);
     }
     ctx.font = "16px Arial";
     ctx.fillText("Touchez l'écran ou appuyez sur Espace", LARGEUR / 2, HAUTEUR / 2 + 25);
@@ -917,6 +1006,15 @@ function terminerPartie() {
     jouerBip(1318, 0.5, "triangle", 0.15, 0.3);
   } else {
     afficherMessage("Partie terminée — score : " + score + ". Appuyez sur Recommencer.");
+  }
+}
+
+// Vibration du téléphone (si le navigateur l'autorise)
+function vibrer(motif) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(motif);
+  } catch (e) {
+    /* non disponible : on ignore */
   }
 }
 

@@ -11,8 +11,12 @@ COMMANDES
                 Flèche droite / D       -> voie de droite
                 Espace ou Entrée        -> démarrer / recommencer
                 M                       -> couper / remettre le son
-  Téléphone  :  Boutons « Gauche » et « Droite »
-                ou toucher la moitié gauche / droite de la route
+  Téléphone  :  Glisser le doigt vers la gauche / la droite (n'importe où
+                sur l'écran ; un long swipe peut changer de 2 voies),
+                toucher la moitié gauche / droite de la route,
+                ou les boutons « Gauche » et « Droite ».
+                Le jeu s'adapte à la taille de l'écran (portrait et paysage)
+                et reste net sur les écrans haute densité.
   Bouton 🔊     -> son activé / coupé (mémorisé)
 
 RÈGLES
@@ -37,5 +41,5 @@ PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
 
 FICHIERS
   index.html, style.css, script.js
-  images/route.png, voiture-rouge.png (joueur),
+  images/route.jpg, voiture-rouge.png (joueur),
   voiture-verte.png, voiture-jaune.png, voiture-bleue.png (adversaires)
