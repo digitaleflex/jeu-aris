@@ -35,6 +35,14 @@ RÈGLES
   - JOUR / NUIT : le ciel change avec la distance (coucher de soleil, nuit,
     aube). La nuit, seuls les phares éclairent la route ; on repère les
     autres voitures à leurs feux arrière rouges.
+  - MÉTÉO : la route passe de sèche à PLUIE ou VERGLAS (annonce avec le
+    panneau « chaussée glissante »). L'adhérence μ est affichée à gauche :
+      sec μ = 0,90  •  pluie μ = 0,55  •  verglas μ = 0,20
+    Moins d'adhérence = changements de voie plus lents, la voiture dépasse
+    sa voie sur la glace, le nitro fait patiner les roues, et après un choc
+    la voiture glisse beaucoup plus loin.
+    FLAQUES (pluie) : aquaplaning, μ = 0,10 et la voiture est déviée.
+    PLAQUES DE VERGLAS : μ = 0,06.
   - La vitesse augmente avec le nombre de voitures dépassées
     (90 km/h au départ, 180 km/h max, +70 km/h avec le nitro).
   - Une collision termine la partie. Le meilleur score est conservé.
@@ -62,5 +70,7 @@ PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
 
 FICHIERS
   index.html, style.css, script.js
+  images/meteo/*.svg (icônes, panneau, flaque, plaque de verglas)
+  images/propositions/*.svg (dessins pour les prochaines idées, voir les issues)
   images/route.jpg, voiture-rouge.png (joueur),
   voiture-verte.png, voiture-jaune.png, voiture-bleue.png (adversaires)

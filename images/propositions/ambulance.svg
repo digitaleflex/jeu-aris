@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="120" viewBox="0 0 56 120">
+  <!-- Ambulance vue de dessus, gyrophares sur le toit -->
+  <g fill="#1b1b1b">
+    <rect x="2" y="14" width="7" height="16" rx="2"/><rect x="47" y="14" width="7" height="16" rx="2"/>
+    <rect x="2" y="88" width="7" height="16" rx="2"/><rect x="47" y="88" width="7" height="16" rx="2"/>
+  </g>
+  <rect x="6" y="4" width="44" height="112" rx="9" fill="#f7f8fa" stroke="#c6ccd4" stroke-width="1.5"/>
+  <rect x="10" y="12" width="36" height="14" rx="4" fill="#1d2633"/>
+  <rect x="6" y="56" width="44" height="7" fill="#e0201c"/>
+  <rect x="16" y="32" width="24" height="8" rx="3" fill="#2a6ef0"/>
+  <rect x="16" y="32" width="12" height="8" rx="3" fill="#e0201c"/>
+  <g fill="#e0201c">
+    <rect x="24" y="72" width="8" height="24" rx="1.5"/><rect x="16" y="80" width="24" height="8" rx="1.5"/>
+  </g>
+  <circle cx="14" cy="7" r="2.5" fill="#fff8d0"/><circle cx="42" cy="7" r="2.5" fill="#fff8d0"/>
+  <rect x="9" y="110" width="9" height="4" rx="1.5" fill="#e0201c"/><rect x="38" y="110" width="9" height="4" rx="1.5" fill="#e0201c"/>
+</svg>

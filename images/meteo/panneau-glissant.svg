@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="106" viewBox="0 0 120 106">
+  <!-- Panneau « chaussée glissante » : triangle rouge, voiture qui dérape -->
+  <path d="M60 4 L116 100 H4 Z" fill="#ffffff" stroke="#d7261e" stroke-width="9" stroke-linejoin="round"/>
+  <g fill="#111">
+    <!-- voiture vue de derrière, inclinée -->
+    <g transform="rotate(-12 60 56)">
+      <rect x="44" y="44" width="32" height="18" rx="4"/>
+      <path d="M48 44 l4-9 h16 l4 9z"/>
+      <rect x="42" y="60" width="7" height="8" rx="2"/>
+      <rect x="71" y="60" width="7" height="8" rx="2"/>
+    </g>
+  </g>
+  <!-- traces de dérapage en S -->
+  <g fill="none" stroke="#111" stroke-width="3.2" stroke-linecap="round">
+    <path d="M46 92 c-8-6 10-10 2-18"/>
+    <path d="M72 92 c-8-6 10-10 2-18"/>
+  </g>
+</svg>

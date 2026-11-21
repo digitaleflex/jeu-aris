@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="70" height="220" viewBox="0 0 70 220">
+  <!-- Camion vu de dessus, cabine en haut (sens de la marche) -->
+  <defs>
+    <linearGradient id="cab" x1="0" x2="1">
+      <stop offset="0" stop-color="#1f5fbf"/><stop offset="0.5" stop-color="#3f86ee"/><stop offset="1" stop-color="#1f5fbf"/>
+    </linearGradient>
+    <linearGradient id="rem" x1="0" x2="1">
+      <stop offset="0" stop-color="#c9ced6"/><stop offset="0.5" stop-color="#f4f6f9"/><stop offset="1" stop-color="#c9ced6"/>
+    </linearGradient>
+  </defs>
+  <g fill="#1b1b1b">
+    <rect x="4" y="18" width="7" height="16" rx="2"/><rect x="59" y="18" width="7" height="16" rx="2"/>
+    <rect x="4" y="150" width="7" height="16" rx="2"/><rect x="59" y="150" width="7" height="16" rx="2"/>
+    <rect x="4" y="170" width="7" height="16" rx="2"/><rect x="59" y="170" width="7" height="16" rx="2"/>
+    <rect x="4" y="192" width="7" height="16" rx="2"/><rect x="59" y="192" width="7" height="16" rx="2"/>
+  </g>
+  <rect x="9" y="4" width="52" height="44" rx="9" fill="url(#cab)"/>
+  <rect x="14" y="9" width="42" height="12" rx="4" fill="#1d2633"/>
+  <rect x="2" y="24" width="6" height="4" rx="2" fill="#3f86ee"/><rect x="62" y="24" width="6" height="4" rx="2" fill="#3f86ee"/>
+  <circle cx="16" cy="6" r="2.5" fill="#fff8d0"/><circle cx="54" cy="6" r="2.5" fill="#fff8d0"/>
+  <rect x="31" y="48" width="8" height="6" fill="#444"/>
+  <rect x="7" y="54" width="56" height="160" rx="4" fill="url(#rem)" stroke="#9aa3ae" stroke-width="1.5"/>
+  <g stroke="#b6bdc7" stroke-width="1.2">
+    <line x1="7" y1="86" x2="63" y2="86"/><line x1="7" y1="118" x2="63" y2="118"/>
+    <line x1="7" y1="150" x2="63" y2="150"/><line x1="7" y1="182" x2="63" y2="182"/>
+  </g>
+  <rect x="10" y="208" width="10" height="5" rx="1.5" fill="#e0201c"/><rect x="50" y="208" width="10" height="5" rx="1.5" fill="#e0201c"/>
+</svg>

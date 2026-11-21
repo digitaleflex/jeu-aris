@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="80" viewBox="0 0 140 80">
+  <defs>
+    <radialGradient id="e" cx="45%" cy="45%" r="60%">
+      <stop offset="0" stop-color="#7fa6c9" stop-opacity="0.75"/>
+      <stop offset="0.7" stop-color="#3d5e80" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#1d2d3f" stop-opacity="0.55"/>
+    </radialGradient>
+  </defs>
+  <path d="M14 40 C4 22 30 8 52 12 C70 2 104 4 120 18 C138 28 136 52 118 62 C100 76 70 72 54 70 C32 76 8 64 14 40 Z" fill="url(#e)"/>
+  <!-- reflets du ciel -->
+  <g stroke="#e8f3ff" stroke-linecap="round" fill="none" opacity="0.75">
+    <path d="M36 28 C52 22 70 22 86 26" stroke-width="3"/>
+    <path d="M60 40 C72 37 88 38 100 42" stroke-width="2"/>
+    <path d="M40 54 C48 52 56 52 62 54" stroke-width="1.6"/>
+  </g>
+  <ellipse cx="96" cy="24" rx="7" ry="2.5" fill="#ffffff" opacity="0.55"/>
+</svg>

@@ -12,7 +12,8 @@
      7. Physique : moteur, direction, trafic, collisions, accident
      8. Dessin de la scène
      9. Boucle d'animation, démarrage et fin de partie
-   Bonus : nitro, frôlements, combos, cycle jour / nuit avec phares
+   Bonus : nitro, frôlements, combos, cycle jour / nuit avec phares,
+           météo (pluie, verglas) qui change l'adhérence des pneus
    ===================================================================== */
 
 /* ---------- 1. Éléments HTML ---------- */
@@ -53,7 +54,8 @@ const G = 9.81;                 // pesanteur (m/s²)
 const MASSE = 1200;             // kg
 const PUISSANCE_MAX = 120000;   // W (≈ 163 ch)
 const ADHERENCE = 0.9;          // coefficient de frottement pneu / route
-const FORCE_ADHERENCE = ADHERENCE * MASSE * G;          // force max transmissible (N)
+// Force max transmissible sur route sèche (N) ; en jeu on utilise forceAdherence()
+const FORCE_ADHERENCE = ADHERENCE * MASSE * G;
 const COEF_TRAINEE = 0.5 * 1.2 * 0.32 * 2.2;            // ½ ρ Cx S  (N par (m/s)²)
 const FORCE_ROULEMENT = 0.012 * MASSE * G;              // résistance au roulement (N)
 const FORCE_FREIN_MAX = 0.8 * MASSE * G;                // freinage (N)
@@ -61,7 +63,7 @@ const FORCE_FREIN_MAX = 0.8 * MASSE * G;                // freinage (N)
 // Physique latérale (changement de voie) : ressort amorti
 const RAIDEUR = 130;            // 1/s²
 const AMORTISSEMENT = 19;       // 1/s
-const ACCEL_LATERALE_MAX = 2600;// px/s²
+const ACCEL_LATERALE_MAX = 2600;// px/s² sur route sèche (proportionnel à l'adhérence)
 
 // Vitesses (km/h)
 const VITESSE_DEPART_KMH = 90;
@@ -92,6 +94,21 @@ const ZONE_DANGER = 480;            // un changement de voie est utile si une vo
 // Cycle jour → coucher de soleil → nuit → aube (en mètres parcourus)
 const LONGUEUR_CYCLE_M = 3600;
 
+/* Météo : chaque temps change le coefficient d'adhérence μ des pneus.
+   Valeurs réelles approximatives : asphalte sec 0,8-1 ; mouillé 0,5-0,6 ; verglas 0,1-0,2.
+   - vitesseMax : un conducteur prudent (ici le régulateur) ralentit ;
+   - crissement : un pneu crisse fort sur le sec, à peine sur le mouillé, pas sur la glace ;
+   - traces : la gomme laisse des traces sur le sec, presque pas ailleurs. */
+const METEOS = {
+  sec:     { nom: "ROUTE SÈCHE", conseil: "Bonne adhérence",               adherence: 0.9,  vitesseMax: 1,    crissement: 1,    traces: 1 },
+  pluie:   { nom: "PLUIE",       conseil: "Route mouillée : anticipez !",  adherence: 0.55, vitesseMax: 0.82, crissement: 0.35, traces: 0.3 },
+  verglas: { nom: "VERGLAS",     conseil: "La voiture glisse : douceur !", adherence: 0.2,  vitesseMax: 0.65, crissement: 0.08, traces: 0.05 }
+};
+const DISTANCE_PREMIERE_METEO_M = 900;   // première averse après ≈ 25 s
+const DISTANCE_ENTRE_METEOS_M = 1300;
+const ADHERENCE_FLAQUE = 0.1;            // aquaplaning : les pneus flottent sur l'eau
+const ADHERENCE_PLAQUE = 0.06;           // plaque de verglas
+
 /* Conversions d'unités */
 function kmhVersPx(kmh) {
   return (kmh / 3.6) * PX_PAR_METRE;
@@ -112,6 +129,24 @@ const imagesAdverses = [
   chargerImage("images/voiture-bleue.png")
 ];
 let imagesRestantes = 5;
+
+// Images secondaires (SVG) : le jeu fonctionne même si elles manquent
+function chargerImageSecondaire(chemin) {
+  const image = new Image();
+  image.addEventListener("error", function () {
+    console.warn("Image secondaire introuvable :", chemin);
+  });
+  image.src = chemin;
+  return image;
+}
+const imagesMeteo = {
+  sec: chargerImageSecondaire("images/meteo/soleil.svg"),
+  pluie: chargerImageSecondaire("images/meteo/pluie.svg"),
+  verglas: chargerImageSecondaire("images/meteo/verglas.svg")
+};
+const imagePanneauGlissant = chargerImageSecondaire("images/meteo/panneau-glissant.svg");
+const imageFlaque = chargerImageSecondaire("images/meteo/flaque.svg");
+const imagePlaqueVerglas = chargerImageSecondaire("images/meteo/plaque-verglas.svg");
 
 function chargerImage(chemin) {
   const image = new Image();
@@ -171,6 +206,8 @@ function initialiserSon() {
   creerSonMoteur(ac);
   son.pneus = creerSonPneus(ac);
   son.vent = creerBruitContinu(ac, "lowpass", 500, 0.7);
+  son.pluie = creerBruitContinu(ac, "highpass", 1800, 0.4);       // averse
+  son.chausseeMouillee = creerBruitContinu(ac, "bandpass", 900, 0.6); // pneus dans l'eau
 }
 
 function creerSonMoteur(ac) {
@@ -236,6 +273,11 @@ function mettreAJourSonContinu(vitesseMs, accelerateur, accelLaterale, enMarche)
   // Bruit du vent : la traînée aérodynamique varie comme v²
   const vent = limiter((vitesseMs / 50) ** 2, 0, 1);
   son.vent.gain.gain.setTargetAtTime(enMarche ? vent * 0.12 : 0, t, 0.2);
+
+  // Pluie : bruit de l'averse + « chhhh » des pneus qui chassent l'eau (∝ vitesse)
+  const pluie = meteo.intensitePluie;
+  son.pluie.gain.gain.setTargetAtTime(enMarche ? 0.09 * pluie : 0, t, 0.3);
+  son.chausseeMouillee.gain.gain.setTargetAtTime(enMarche ? 0.16 * pluie * limiter(vitesseMs / 40, 0, 1) : 0, t, 0.2);
 }
 
 function couperSonsContinus() {
@@ -368,8 +410,9 @@ function mettreAJourSonPneus(glisse, vitesseMs) {
   const fort = Math.pow(g, 1.4);
   // Attaque rapide quand le pneu décroche, extinction plus douce quand il raccroche
   const reaction = g > 0.02 ? 0.015 : 0.06;
-  p.sifflement.gain.setTargetAtTime(0.16 * fort * vacillement, t, reaction);
-  p.gainOsc.gain.setTargetAtTime(0.05 * fort * vacillement, t, reaction);
+  const meteoSon = facteurMeteo("crissement");
+  p.sifflement.gain.setTargetAtTime(0.16 * fort * vacillement * meteoSon, t, reaction);
+  p.gainOsc.gain.setTargetAtTime(0.05 * fort * vacillement * meteoSon, t, reaction);
   p.gainFrottement.gain.setTargetAtTime(0.12 * g * vacillement, t, reaction);
   p.gainGrave.gain.setTargetAtTime(0.35 * g, t, 0.05);
 }
@@ -458,6 +501,36 @@ function sonCombo(niveau) {
 function sonComboPerdu() {
   jouerBip(392, 0.15, "sawtooth", 0.07);
   jouerBip(262, 0.3, "sawtooth", 0.07, 0.12);
+}
+
+// Tonnerre au début d'une averse : grondement grave et long
+function sonTonnerre() {
+  jouerBruit(2.8, "lowpass", 400, 40, 0.8);
+  jouerBruit(0.4, "lowpass", 1500, 200, 0.35);
+}
+
+// Verglas : petits tintements cristallins
+function sonGivre() {
+  for (let i = 0; i < 5; i++) {
+    jouerBip(2400 + Math.random() * 2200, 0.25, "sine", 0.05, i * 0.07);
+  }
+}
+
+function sonRouteSeche() {
+  jouerBip(660, 0.15, "triangle", 0.1);
+  jouerBip(880, 0.25, "triangle", 0.1, 0.1);
+}
+
+// Roue dans une flaque : gros « splash »
+function sonFlaque() {
+  jouerBruit(0.5, "lowpass", 2500, 300, 0.6);
+  jouerBruit(0.25, "bandpass", 1200, 600, 0.35);
+}
+
+// Roue sur une plaque de verglas : craquement sec
+function sonPlaque() {
+  jouerBruit(0.08, "highpass", 4000, 2500, 0.4);
+  jouerBip(3200, 0.12, "square", 0.04, 0.03);
 }
 
 function sonChangementVoie() {
@@ -560,6 +633,19 @@ const joueur = {
 
 let traces = [];     // traces de pneus laissées sur la route
 
+/* Météo : on passe progressivement d'un temps à l'autre.
+   intensitePluie et intensiteVerglas vont de 0 à 1. */
+const meteo = {
+  actuelle: "sec",
+  intensitePluie: 0,
+  intensiteVerglas: 0,
+  distanceRestante: DISTANCE_PREMIERE_METEO_M, // mètres avant le prochain changement
+  annonce: 0,          // durée restante de l'annonce à l'écran (s)
+  surDanger: null      // flaque ou plaque sous les roues (ou null)
+};
+let dangers = [];        // flaques et plaques de verglas collées à la route
+let distanceDanger = 0;  // px parcourus depuis le dernier danger
+
 let obstacles = [];
 let particules = [];
 
@@ -586,6 +672,14 @@ function reinitialiserPartie() {
   particules = [];
   traces = [];
   joueur.glisse = 0;
+  meteo.actuelle = "sec";
+  meteo.intensitePluie = 0;
+  meteo.intensiteVerglas = 0;
+  meteo.distanceRestante = DISTANCE_PREMIERE_METEO_M;
+  meteo.annonce = 0;
+  meteo.surDanger = null;
+  dangers = [];
+  distanceDanger = 0;
   distanceDepuisVague = 0;
   tremblement = 0;
   dureeAccident = 0;
@@ -785,6 +879,7 @@ function mettreAJour(dt) {
   defilement += joueur.vitesse * dt;
   deplacerObstacles(dt);
   mettreAJourNitro(dt);
+  mettreAJourMeteo(dt);
   mesurerEcartsLateraux();
   mettreAJourParticules(dt);
   mettreAJourTextesFlottants(dt);
@@ -806,6 +901,7 @@ function mettreAJourMoteur(dt) {
   const v = joueur.vitesse / PX_PAR_METRE;                       // m/s
   let vitesseCibleKmh = Math.min(VITESSE_MAX_KMH, VITESSE_DEPART_KMH + voituresEvitees * 2.5);
   if (nitro.actif) vitesseCibleKmh += NITRO_BONUS_KMH;
+  vitesseCibleKmh *= facteurMeteo("vitesseMax");
   const vCible = vitesseCibleKmh / 3.6;
   const puissance = PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1);
 
@@ -817,7 +913,7 @@ function mettreAJourMoteur(dt) {
   const accelerateur = limiter(puissanceMaintien + (vCible - v) * 0.5, 0, 1);
   joueur.accelerateur = accelerateur;
 
-  let forceMoteur = accelerateur * Math.min(FORCE_ADHERENCE, puissance / Math.max(v, 1));
+  let forceMoteur = accelerateur * Math.min(forceAdherence(), puissance / Math.max(v, 1));
   if (v > vCible + 1) forceMoteur = -Math.min(FORCE_FREIN_MAX, (v - vCible) * 2000);
 
   const acceleration = (forceMoteur - forceTrainee - FORCE_ROULEMENT) / MASSE;
@@ -832,19 +928,25 @@ function mettreAJourMoteur(dt) {
 function mettreAJourDirection(dt) {
   const cible = centreVoie(joueur.voie);
   let ax = RAIDEUR * (cible - joueur.x) - AMORTISSEMENT * joueur.vx;
-  ax = limiter(ax, -ACCEL_LATERALE_MAX, ACCEL_LATERALE_MAX);
+  // Sur le verglas, de petites irrégularités de la glace font dériver la voiture
+  ax += deriveVerglas();
+  // Les pneus ne peuvent pas fournir plus que μ·g : sur route glissante la voiture
+  // met plus de temps à changer de voie et dépasse sa cible (survirage)
+  const accelMax = ACCEL_LATERALE_MAX * adherence() / ADHERENCE;
+  ax = limiter(ax, -accelMax, accelMax);
   joueur.ax = ax;
   joueur.vx += ax * dt;
   joueur.x += joueur.vx * dt;
   joueur.angle = limiter(Math.atan2(joueur.vx, Math.max(joueur.vitesse, 1)), -0.5, 0.5);
 
   // Glissement latéral : un virage serré dépasse l'adhérence des pneus
-  const glisseLaterale = limiter((Math.abs(ax) - 800) / 1500, 0, 1);
+  const k = adherence() / ADHERENCE;
+  const glisseLaterale = limiter((Math.abs(ax) - 800 * k) / (1500 * k), 0, 1);
   // Patinage : la force demandée au moteur approche la limite d'adhérence μ·m·g
   const v = Math.max(joueur.vitesse / PX_PAR_METRE, 1);
   const puissance = PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1);
   const forceDemandee = joueur.accelerateur * puissance / v;
-  const patinage = limiter((forceDemandee / FORCE_ADHERENCE - 0.8) / 0.25, 0, 1);
+  const patinage = limiter((forceDemandee / forceAdherence() - 0.8) / 0.25, 0, 1);
   lisserGlisse(Math.max(glisseLaterale, patinage), dt);
   laisserTraces(dt);
 }
@@ -856,7 +958,7 @@ function lisserGlisse(cible, dt) {
 /* Traces de pneus : on mémorise la position des roues arrière quand la voiture glisse.
    Les traces sont « collées » à la route : elles descendent avec le défilement. */
 function laisserTraces(dt) {
-  if (joueur.glisse < 0.3) return;
+  if (joueur.glisse < 0.3 || facteurMeteo("traces") < 0.1) return;
   const cosA = Math.cos(joueur.angle);
   const sinA = Math.sin(joueur.angle);
   const centreY = joueur.y + VOITURE_HAUTEUR / 2;
@@ -867,7 +969,7 @@ function laisserTraces(dt) {
       x: joueur.x + lx * cosA - ly * sinA,
       y: centreY + lx * sinA + ly * cosA,
       defilementDepart: defilement,
-      opacite: 0.2 + 0.45 * joueur.glisse
+      opacite: (0.2 + 0.45 * joueur.glisse) * facteurMeteo("traces")
     });
   }
   if (traces.length > 1500) traces.splice(0, traces.length - 1500);
@@ -914,7 +1016,9 @@ function creerVaguesDeTrafic(dt) {
   distanceDepuisVague += vRel * dt;
 
   // Écart entre deux vagues : au moins ≈ 0,85 s pour pouvoir changer de voie
-  const ecart = VOITURE_HAUTEUR + Math.max(160, vRel * 0.85);
+  // Sur route glissante, on laisse plus de temps pour changer de voie
+  const tempsReaction = 0.85 + 0.7 * (1 - adherence() / ADHERENCE);
+  const ecart = VOITURE_HAUTEUR + Math.max(160, vRel * tempsReaction);
   if (distanceDepuisVague >= ecart) {
     distanceDepuisVague = 0;
     creerVague();
@@ -950,6 +1054,7 @@ function creerObstacle(voie) {
     accidente: false,
     compte: false,
     ecartMin: Infinity, // plus petit écart latéral avec le joueur (frôlement)
+    phase: Math.random() * 6.28, // pour le léger louvoiement sur le verglas
     image: imagesAdverses[Math.floor(Math.random() * imagesAdverses.length)]
   });
 }
@@ -964,6 +1069,13 @@ function deplacerObstacles(dt) {
       o.x += o.vx * dt;
       o.angle += o.rotation * dt;
       o.rotation *= Math.exp(-2.5 * dt);
+    } else {
+      // Sur le verglas, les autres conducteurs louvoient un peu
+      o.angle = meteo.intensiteVerglas * 0.07 * Math.sin(defilement * 0.004 + o.phase);
+    }
+    // Gerbe d'eau derrière les voitures sous la pluie
+    if (meteo.intensitePluie > 0.3 && Math.random() < 0.25 * meteo.intensitePluie) {
+      creerGerbe(o.x, o.y + VOITURE_HAUTEUR, joueur.vitesse - o.vitesse);
     }
   }
   // On supprime les voitures sorties de l'écran (en bas, ou en haut si le joueur est arrêté)
@@ -1056,7 +1168,7 @@ function declencherAccident(obstacle) {
 
 // Frottement de glissement : décélération constante μ·g, jusqu'à l'arrêt
 function ralentirParFrottement(vitesse, dt) {
-  const deceleration = ADHERENCE * G * PX_PAR_METRE * dt;
+  const deceleration = adherence() * G * PX_PAR_METRE * dt;
   if (Math.abs(vitesse) <= deceleration) return 0;
   return vitesse - Math.sign(vitesse) * deceleration;
 }
@@ -1131,6 +1243,12 @@ function mettreAJourParticules(dt) {
       p.taille *= Math.exp(-4 * dt);
     } else if (p.type === "fumee") {
       p.taille += 14 * dt;      // la fumée se dilate
+    } else if (p.type === "onde") {
+      p.taille += 22 * dt;      // le rond dans l'eau s'élargit
+    } else if (p.type === "gerbe") {
+      p.taille += 30 * dt;      // l'eau pulvérisée se disperse
+    } else if (p.type === "flocon") {
+      p.vx += Math.sin(p.age * 3 + p.y) * 20 * dt;
     }
   }
   particules = particules.filter(function (p) {
@@ -1276,6 +1394,170 @@ function mettreAJourBoutonNitro() {
   boutonNitro.classList.toggle("pret", charge >= 100 && !nitro.actif);
 }
 
+/* ---------- Météo : pluie et verglas ---------- */
+
+// Valeur d'une propriété de METEOS, mélangée selon l'intensité de la pluie et du verglas
+function facteurMeteo(propriete) {
+  const sec = METEOS.sec[propriete];
+  return sec
+    + (METEOS.pluie[propriete] - sec) * meteo.intensitePluie
+    + (METEOS.verglas[propriete] - sec) * meteo.intensiteVerglas;
+}
+
+// Coefficient d'adhérence μ réellement disponible sous les roues
+function adherence() {
+  let mu = facteurMeteo("adherence");
+  if (meteo.surDanger === "flaque") mu = Math.min(mu, ADHERENCE_FLAQUE);
+  if (meteo.surDanger === "verglas") mu = Math.min(mu, ADHERENCE_PLAQUE);
+  return Math.max(mu, 0.05);
+}
+
+function forceAdherence() {
+  return adherence() * MASSE * G;
+}
+
+// Petite force latérale irrégulière sur la glace (somme de sinus de périodes différentes)
+function deriveVerglas() {
+  const t = defilement / PX_PAR_METRE;
+  return meteo.intensiteVerglas * 160 * (Math.sin(t * 0.21) + 0.6 * Math.sin(t * 0.53 + 1.7));
+}
+
+function mettreAJourMeteo(dt) {
+  // Transition douce (≈ 2 s) vers le temps visé
+  const viserPluie = meteo.actuelle === "pluie" ? 1 : 0;
+  const viserVerglas = meteo.actuelle === "verglas" ? 1 : 0;
+  const vitesseTransition = 0.5 * dt;
+  meteo.intensitePluie += limiter(viserPluie - meteo.intensitePluie, -vitesseTransition, vitesseTransition);
+  meteo.intensiteVerglas += limiter(viserVerglas - meteo.intensiteVerglas, -vitesseTransition, vitesseTransition);
+  meteo.annonce = Math.max(0, meteo.annonce - dt);
+
+  if (etat === "jeu") {
+    meteo.distanceRestante -= joueur.vitesse * dt / PX_PAR_METRE;
+    if (meteo.distanceRestante <= 0) changerMeteo();
+    creerDangers(dt);
+  }
+  deplacerDangers(dt);
+  if (etat === "jeu" || etat === "compte") verifierDangersSousRoues();
+  creerEffetsMeteo();
+}
+
+// Après le sec : pluie (60 %) ou verglas (40 %). Après pluie ou verglas : retour au sec.
+function changerMeteo() {
+  let suivante = "sec";
+  if (meteo.actuelle === "sec") suivante = Math.random() < 0.6 ? "pluie" : "verglas";
+  meteo.actuelle = suivante;
+  meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M * (0.8 + Math.random() * 0.4);
+  meteo.annonce = 2.6;
+  if (suivante === "pluie") sonTonnerre();
+  else if (suivante === "verglas") sonGivre();
+  else sonRouteSeche();
+  afficherMessage(METEOS[suivante].nom.charAt(0) + METEOS[suivante].nom.slice(1).toLowerCase() + " — " + METEOS[suivante].conseil);
+}
+
+/* Flaques (pluie) et plaques de verglas : posées sur une voie, elles défilent avec la route */
+function creerDangers(dt) {
+  const intensite = Math.max(meteo.intensitePluie, meteo.intensiteVerglas);
+  if (intensite < 0.6) return;
+  distanceDanger += joueur.vitesse * dt;
+  if (distanceDanger < 900 + Math.random() * 600) return;
+  distanceDanger = 0;
+  const voie = Math.floor(Math.random() * NB_VOIES);
+  const estPluie = meteo.intensitePluie > meteo.intensiteVerglas;
+  dangers.push({
+    type: estPluie ? "flaque" : "verglas",
+    x: centreVoie(voie) + (Math.random() - 0.5) * 16,
+    y: -120,
+    largeur: LARGEUR_VOIE * (0.8 + Math.random() * 0.25),
+    hauteur: 55 + Math.random() * 35,
+    touche: false
+  });
+}
+
+function deplacerDangers(dt) {
+  for (const d of dangers) {
+    d.y += joueur.vitesse * dt; // collés à la route
+  }
+  dangers = dangers.filter(function (d) {
+    return d.y < HAUTEUR + 20;
+  });
+}
+
+// Les roues du joueur sont-elles sur une flaque ou une plaque ?
+function verifierDangersSousRoues() {
+  const roues = rectangle(joueur);
+  meteo.surDanger = null;
+  for (const d of dangers) {
+    const zone = {
+      gauche: d.x - d.largeur * 0.4,
+      droite: d.x + d.largeur * 0.4,
+      haut: d.y + d.hauteur * 0.15,
+      bas: d.y + d.hauteur * 0.85
+    };
+    if (seChevauchent(roues, zone)) {
+      meteo.surDanger = d.type;
+      if (!d.touche) entrerSurDanger(d);
+    }
+  }
+}
+
+function entrerSurDanger(danger) {
+  danger.touche = true;
+  // Une roue freinée par l'eau d'un côté seulement fait dévier la voiture
+  joueur.vx += (Math.random() < 0.5 ? -1 : 1) * (50 + Math.random() * 60);
+  if (danger.type === "flaque") {
+    ajouterTexteFlottant("AQUAPLANING !", joueur.x, joueur.y - 30, "#8fd3ff", 24);
+    for (let i = 0; i < 18; i++) creerGerbe(joueur.x + (Math.random() - 0.5) * 40, joueur.y + VOITURE_HAUTEUR * 0.6, 250);
+    sonFlaque();
+  } else {
+    ajouterTexteFlottant("PLAQUE DE GLACE !", joueur.x, joueur.y - 30, "#dff3ff", 22);
+    sonPlaque();
+  }
+  vibrer(30);
+}
+
+/* Particules météo : gouttes, ronds dans l'eau, gerbes d'eau, flocons */
+function creerEffetsMeteo() {
+  const pluie = meteo.intensitePluie;
+  const verglas = meteo.intensiteVerglas;
+  // Gouttes de pluie : traits qui tombent vite, inclinés par le vent
+  if (Math.random() < 1.3 * pluie) {
+    particules.push({
+      x: Math.random() * (LARGEUR + 60) - 30, y: -30,
+      vx: -60, vy: 900 + joueur.vitesse * 0.4,
+      vie: 0.8, age: 0, taille: 14 + Math.random() * 10, type: "goutte"
+    });
+  }
+  // Ronds dans l'eau sur la chaussée (collés à la route)
+  if (Math.random() < 0.18 * pluie) {
+    particules.push({
+      x: ROUTE_GAUCHE + Math.random() * ROUTE_LARGEUR, y: Math.random() * HAUTEUR,
+      vx: 0, vy: joueur.vitesse,
+      vie: 0.45, age: 0, taille: 1, type: "onde", auSol: true
+    });
+  }
+  // Gerbe d'eau soulevée par les roues du joueur
+  if (pluie > 0.3 && Math.random() < 0.5 * pluie * limiter(joueur.vitesse / kmhVersPx(100), 0, 1.5)) {
+    const cote = Math.random() < 0.5 ? -1 : 1;
+    creerGerbe(joueur.x + cote * (VOITURE_LARGEUR / 2 - 6), joueur.y + VOITURE_HAUTEUR - 6, joueur.vitesse * 0.3);
+  }
+  // Flocons légers sur le verglas
+  if (Math.random() < 0.35 * verglas) {
+    particules.push({
+      x: Math.random() * LARGEUR, y: -10,
+      vx: (Math.random() - 0.5) * 30, vy: 60 + joueur.vitesse * 0.35,
+      vie: 3, age: 0, taille: 1.2 + Math.random() * 2, type: "flocon"
+    });
+  }
+}
+
+function creerGerbe(x, y, vitesseDescente) {
+  particules.push({
+    x: x + (Math.random() - 0.5) * 10, y: y,
+    vx: (Math.random() - 0.5) * 70, vy: vitesseDescente + 40 + Math.random() * 60,
+    vie: 0.35 + Math.random() * 0.25, age: 0, taille: 4 + Math.random() * 4, type: "gerbe"
+  });
+}
+
 /* ---------- 8. Dessin ---------- */
 function dessinerScene() {
   ctx.clearRect(0, 0, LARGEUR, HAUTEUR);
@@ -1284,16 +1566,21 @@ function dessinerScene() {
     ctx.translate((Math.random() - 0.5) * tremblement, (Math.random() - 0.5) * tremblement);
   }
   dessinerRoute();
+  dessinerChaussee();
+  dessinerDangers();
   dessinerTraces();
+  dessinerParticules(true);
   for (const o of obstacles) {
     dessinerVoiture(o.image, o.x, o.y, o.angle);
   }
   dessinerVoiture(imageJoueur, joueur.x, joueur.y, joueur.angle);
-  dessinerParticules();
+  dessinerParticules(false);
   dessinerAmbiance();
+  dessinerGivre();
   dessinerTextesFlottants();
   ctx.restore();
   dessinerInterfaceJeu();
+  dessinerAnnonceMeteo();
   dessinerTexteSurCanvas();
   mettreAJourCompteurVitesse();
 }
@@ -1452,6 +1739,22 @@ function dessinerInterfaceJeu() {
   ctx.fillStyle = "#ffd23f";
   ctx.fillRect(12, 56, (ROUTE_GAUCHE - 24) * progression, 5);
 
+  // Météo : icône + adhérence μ (devient rouge sur une flaque ou une plaque)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.beginPath();
+  rectangleArrondi(5, 78, ROUTE_GAUCHE - 10, 74, 10);
+  ctx.fill();
+  const icone = imagesMeteo[meteo.actuelle];
+  if (imagePrete(icone)) ctx.drawImage(icone, xCombo - 16, 83, 32, 32);
+  const mu = adherence();
+  ctx.font = "bold 11px Arial";
+  ctx.fillStyle = meteo.surDanger ? "#ff6b6b" : "#ffffff";
+  ctx.fillText("μ " + mu.toFixed(2).replace(".", ","), xCombo, 126);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.fillRect(12, 138, ROUTE_GAUCHE - 24, 5);
+  ctx.fillStyle = mu > 0.7 ? "#4ade80" : (mu > 0.35 ? "#facc15" : "#ff6b6b");
+  ctx.fillRect(12, 138, (ROUTE_GAUCHE - 24) * Math.min(1, mu / ADHERENCE), 5);
+
   // Nitro
   const xJauge = LARGEUR - ROUTE_GAUCHE / 2;
   const hauteurJauge = 110;
@@ -1469,6 +1772,91 @@ function dessinerInterfaceJeu() {
   ctx.fillStyle = nitro.actif ? "#5ee7ff" : (clignote ? "#ffffff" : "#ff9a3c");
   const h = hauteurJauge * nitro.jauge;
   ctx.fillRect(xJauge - 7, 30 + hauteurJauge - h, 14, h);
+}
+
+// Route mouillée (plus sombre, reflets) ou givrée (voile bleuté)
+function dessinerChaussee() {
+  const pluie = meteo.intensitePluie;
+  const verglas = meteo.intensiteVerglas;
+  if (pluie > 0.01) {
+    ctx.fillStyle = "rgba(10, 25, 50, " + 0.28 * pluie + ")";
+    ctx.fillRect(0, 0, LARGEUR, HAUTEUR);
+    // Reflets allongés qui défilent avec la route
+    const decalage = defilement % 180;
+    ctx.fillStyle = "rgba(180, 210, 255, " + 0.07 * pluie + ")";
+    for (let y = decalage - 180; y < HAUTEUR; y += 180) {
+      ctx.fillRect(ROUTE_GAUCHE + 20, y, 14, 90);
+      ctx.fillRect(ROUTE_GAUCHE + LARGEUR_VOIE + 30, y + 70, 10, 70);
+      ctx.fillRect(ROUTE_GAUCHE + 2 * LARGEUR_VOIE + 24, y + 30, 12, 110);
+    }
+  }
+  if (verglas > 0.01) {
+    ctx.fillStyle = "rgba(200, 230, 255, " + 0.22 * verglas + ")";
+    ctx.fillRect(0, 0, LARGEUR, HAUTEUR);
+    // Herbe gelée
+    ctx.fillStyle = "rgba(240, 250, 255, " + 0.35 * verglas + ")";
+    ctx.fillRect(0, 0, ROUTE_GAUCHE - 4, HAUTEUR);
+    ctx.fillRect(ROUTE_GAUCHE + ROUTE_LARGEUR + 4, 0, LARGEUR - ROUTE_GAUCHE - ROUTE_LARGEUR - 4, HAUTEUR);
+  }
+}
+
+function dessinerDangers() {
+  for (const d of dangers) {
+    const image = d.type === "flaque" ? imageFlaque : imagePlaqueVerglas;
+    if (imagePrete(image)) {
+      ctx.drawImage(image, d.x - d.largeur / 2, d.y, d.largeur, d.hauteur);
+    } else {
+      ctx.fillStyle = d.type === "flaque" ? "rgba(60, 100, 150, 0.6)" : "rgba(220, 240, 255, 0.6)";
+      ctx.beginPath();
+      ctx.ellipse(d.x, d.y + d.hauteur / 2, d.largeur / 2, d.hauteur / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// Bords de l'écran givrés quand il gèle
+function dessinerGivre() {
+  const verglas = meteo.intensiteVerglas;
+  if (verglas < 0.01) return;
+  const degrade = ctx.createRadialGradient(LARGEUR / 2, HAUTEUR / 2, HAUTEUR * 0.35, LARGEUR / 2, HAUTEUR / 2, HAUTEUR * 0.75);
+  degrade.addColorStop(0, "rgba(230, 245, 255, 0)");
+  degrade.addColorStop(1, "rgba(230, 245, 255, " + 0.5 * verglas + ")");
+  ctx.fillStyle = degrade;
+  ctx.fillRect(-20, -20, LARGEUR + 40, HAUTEUR + 40);
+}
+
+// Annonce d'un changement de temps : bandeau compact en haut (ne cache pas la route)
+function dessinerAnnonceMeteo() {
+  if (meteo.annonce <= 0 || etat !== "jeu") return;
+  const infos = METEOS[meteo.actuelle];
+  const age = 2.6 - meteo.annonce;
+  const entree = Math.min(1, age / 0.25);          // glisse depuis le haut
+  const sortie = Math.min(1, meteo.annonce / 0.4);  // s'efface à la fin
+  const x = ROUTE_GAUCHE + 6;
+  const y = 8 - (1 - entree) * 80;
+  ctx.save();
+  ctx.globalAlpha = sortie;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.beginPath();
+  rectangleArrondi(x, y, ROUTE_LARGEUR - 12, 62, 12);
+  ctx.fill();
+  const image = meteo.actuelle === "sec" ? imagesMeteo.sec : imagePanneauGlissant;
+  if (imagePrete(image)) {
+    if (meteo.actuelle === "sec") ctx.drawImage(image, x + 8, y + 8, 46, 46);
+    else ctx.drawImage(image, x + 6, y + 9, 52, 46);
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 19px Arial";
+  ctx.fillStyle = meteo.actuelle === "verglas" ? "#bfe6ff" : (meteo.actuelle === "pluie" ? "#8fd3ff" : "#ffd23f");
+  ctx.fillText(infos.nom, x + 66, y + 17);
+  ctx.font = "bold 11px Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(infos.conseil, x + 66, y + 36);
+  ctx.font = "11px Arial";
+  ctx.fillStyle = "#cfd8e3";
+  ctx.fillText("Adhérence μ = " + infos.adherence.toFixed(2).replace(".", ","), x + 66, y + 51);
+  ctx.restore();
 }
 
 function dessinerRoute() {
@@ -1516,9 +1904,41 @@ function dessinerVoiture(image, xCentre, yHaut, angle) {
   ctx.restore();
 }
 
-function dessinerParticules() {
+function dessinerParticules(auSol) {
   for (const p of particules) {
+    if (Boolean(p.auSol) !== Boolean(auSol)) continue;
     const restant = 1 - p.age / p.vie;
+    if (p.type === "goutte") {
+      ctx.strokeStyle = "rgba(200, 220, 255, " + 0.5 * restant + ")";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + p.taille * 0.07, p.y - p.taille);
+      ctx.stroke();
+      continue;
+    }
+    if (p.type === "onde") {
+      ctx.strokeStyle = "rgba(210, 230, 255, " + 0.5 * restant + ")";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, p.taille, p.taille * 0.6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      continue;
+    }
+    if (p.type === "gerbe") {
+      ctx.fillStyle = "rgba(220, 235, 250, " + 0.35 * restant + ")";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.taille, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    if (p.type === "flocon") {
+      ctx.fillStyle = "rgba(255, 255, 255, " + 0.85 * Math.min(1, restant * 3) + ")";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.taille, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
     if (p.type === "etincelle") {
       ctx.fillStyle = "rgba(255, " + Math.floor(160 + 90 * restant) + ", 60, " + restant + ")";
       ctx.fillRect(p.x, p.y, p.taille, p.taille);
