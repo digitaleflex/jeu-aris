@@ -44,6 +44,19 @@ COMMANDES
   (départ, météo, accident) restent dans la barre #message ; l'ancien écran
   « Prêt ? » est remplacé par l'accueil HTML.
 
+MACHINE À ÉTATS (les deux idées à présenter à l'oral, avec l'objet MODES)
+  accueil ──► choixMode ──► compte ──► jeu ──► fin ──┐
+     ▲            ▲                      │            │
+     │            │                   accident ───────┤
+     │            └── « Changer de mode » ◄───────────┤
+     └────────────── « Changer de joueur » ◄──────────┘
+                        « Rejouer » ──► compte
+  Un seul état actif à la fois. Une seule boucle requestAnimationFrame :
+  lancerPartie() annule la boucle précédente avant d'en démarrer une nouvelle.
+  L'objet MODES décrit chaque mode ; les crochets preparerMode, mettreAJourMode,
+  verifierFinMode et dessinerInterfaceMode sont appelés par la boucle. Ajouter
+  un mode = une entrée dans MODES (+ ses crochets), sans modifier la boucle.
+
 DIFFICULTÉ
   Choisie sur l'écran de mode, mémorisée pour la prochaine partie.
   Un seul tableau (DIFFICULTES dans script.js) regroupe les réglages :
@@ -154,9 +167,53 @@ CLASSEMENTS
   scores » demande confirmation dans la page (pas de fenêtre native).
 
 TESTS
-  node tests/verification.mjs  → 23 vérifications headless (parcours complet,
-  records, difficulté, boucle unique, grille de course, 60 s de rivaux sans
-  accident, checkpoints Chrono, limites Zen, graine du jour et classements).
+  1) node tests/verification.mjs   → 23 vérifications headless (DOM simulé) :
+     parcours complet, records, difficulté, boucle unique, grille de course,
+     60 s de rivaux sans accident, checkpoints Chrono, limites Zen, graine
+     du jour et classements. Aucune installation nécessaire.
+  2) npx playwright test           → 7 scénarios navigateur (Chromium) :
+     - nom invalide refusé, nom valide mémorisé après rechargement ;
+     - chaque mode se lance, se termine et se relance 5 fois (aucune erreur
+       console, aucune accélération de la boucle) ;
+     - changement de mode sans recharger la page ;
+     - navigation au clavier seul, puis geste sur le Canvas ;
+     - navigation privée simulée (localStorage qui lève une erreur) ;
+     - portrait et paysage sans défilement horizontal ;
+     - classement accessible et effacement avec confirmation.
+     Installation : npm install --no-save @playwright/test@1.65.1
+     (le serveur local et le navigateur sont lancés automatiquement).
+
+FICHE ORAL
+  Q1 — Pourquoi une machine à états ?
+      Le jeu n'a plus une seule règle codée en dur. L'état courant décide des
+      commandes actives et des écrans visibles : on ne peut pas conduire sur
+      l'accueil, ni saisir son nom pendant la course. Les transitions sont
+      explicites (accueil → choixMode → compte → jeu → fin) et un seul point
+      de remise à zéro, reinitialiserPartie(), évite les bugs entre deux parties.
+
+  Q2 — Comment la course reste-t-elle juste ?
+      Les quatre voitures appellent les mêmes fonctions appliquerMoteur et
+      appliquerDirection : même puissance, même traînée, même adhérence μ et
+      même météo. L'IA n'a pas de vitesse magique : elle décide seulement d'une
+      voie et du nitro. L'élastique est léger et coupé en Difficile.
+
+  Q3 — Comment fonctionne la graine du défi du jour ?
+      mulberry32(AAAAMMDD) produit une suite de nombres déterministe. On l'a
+      branchée sur tout ce qui construit la route (vagues, voitures, météo,
+      dangers) via aleatoire() ; les étincelles et les gouttes gardent
+      Math.random car elles n'influencent pas le jeu. Même date = même route.
+
+  Q4 — Pourquoi un pas de temps fixe ?
+      boucle() accumule le temps réel et exécute mettreAJour(1/120 s) autant
+      de fois que nécessaire. La physique est donc identique à 60, 120 ou
+      144 Hz, et le chrono suit le temps de jeu (le ralenti le ralentit aussi).
+
+  Q5 — Comment sont gérés les records et classements ?
+      Chaque joueur a un record par mode (record.<mode>.<nom>), un meilleur
+      temps pour la course, une distance pour le chrono, et un score daté pour
+      le défi. Les classements sont des top 10 JSON triés selon la règle du
+      mode ; les noms sont comparés en minuscules pour fusionner « Léa » et
+      « léa ». Toutes les lectures localStorage sont protégées par try/catch.
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
   - Moteur : m·a = F_moteur − F_traînée − F_roulement,

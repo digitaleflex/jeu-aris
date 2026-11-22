@@ -120,6 +120,7 @@ const DIFFICULTES = {
 /* Modes de jeu. Ajouter un mode = ajouter une entrée ici (+ d'éventuels
    réglages dans les crochets preparerMode / mettreAJourMode / verifierFinMode). */
 const MODES = {
+  // 🚗💨 Esquive : le jeu historique. Un choc = fin, score = points × combo.
   esquive: {
     nom: "Esquive",
     icone: "🚗💨",
@@ -138,6 +139,7 @@ const MODES = {
     meteo: true,
     disponible: true
   },
+  // 🏁 Course : 3 km contre 3 rivaux, physique partagée, classement à l'arrivée.
   course: {
     nom: "Course",
     icone: "🏁",
@@ -156,6 +158,7 @@ const MODES = {
     meteo: true,
     disponible: true
   },
+  // ⏱ Chrono : 30 s, checkpoints qui ajoutent du temps, score = distance.
   chrono: {
     nom: "Chrono",
     icone: "⏱️",
@@ -174,6 +177,7 @@ const MODES = {
     meteo: true,
     disponible: true
   },
+  // 🧘 Zen : sans fin ni record, météo et heure libres, panneau pédagogique.
   zen: {
     nom: "Zen",
     icone: "🌿",
@@ -192,6 +196,7 @@ const MODES = {
     meteo: true,
     disponible: true
   },
+  // 📅 Défi du jour : graine = date, une tentative officielle par joueur.
   defi: {
     nom: "Défi du jour",
     icone: "📅",
@@ -3751,6 +3756,24 @@ document.addEventListener("visibilitychange", function () {
   if (document.hidden) son.contexte.suspend();
   else son.contexte.resume();
 });
+
+// Accès de test (uniquement avec ?test=1) : permet aux scénarios Playwright
+// de terminer une partie sans attendre une collision réelle.
+try {
+  if (new URLSearchParams(location.search).has("test")) {
+    window.__jeu = {
+      get etat() { return etat; },
+      get modeActuel() { return modeActuel; },
+      lancerPartie: lancerPartie,
+      terminerPartie: terminerPartie,
+      demarrerMode: demarrerMode,
+      afficherChoixMode: afficherChoixMode,
+      retourAccueil: retourAccueil
+    };
+  }
+} catch (e) {
+  /* navigation sans URL : on ignore */
+}
 
 // Démarrage : tous les écrans sont câblés, on ouvre l'accueil
 initialiserInterface();
