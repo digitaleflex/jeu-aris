@@ -7,19 +7,62 @@ LANCER LE JEU
   Les sons sont générés par le navigateur (Web Audio API) : aucun fichier audio.
 
 COMMANDES
-  Ordinateur :  Flèche gauche / Q / A  -> voie de gauche
-                Flèche droite / D       -> voie de droite
-                Flèche haut / Z / W     -> NITRO
-                Espace ou Entrée        -> démarrer / recommencer
-                M                       -> couper / remettre le son
-  Téléphone  :  Glisser le doigt vers la gauche / la droite (n'importe où
-                sur l'écran ; un long swipe peut changer de 2 voies),
-                toucher la moitié gauche / droite de la route,
-                ou les boutons « Gauche » et « Droite ».
-                Glisser vers le HAUT (ou bouton 🔥) -> NITRO
-                Le jeu s'adapte à la taille de l'écran (portrait et paysage)
-                et reste net sur les écrans haute densité.
+  Accueil   :  tape ton nom (2 à 12 caractères : lettres, chiffres,
+               espace ou tiret), puis Entrée ou « Continuer ».
+               Les 3 derniers noms sont proposés en un clic.
+  Choix du mode :  flèches gauche/droite (ou haut/bas) pour passer d'une
+               carte à l'autre, Entrée pour ouvrir les règles,
+               Échap pour revenir à l'accueil.
+  Règles    :  « C'est parti ! » lance la partie, « Retour » revient aux modes.
+               La case « Ne plus afficher » mémorise ton choix.
+  En jeu    :  Flèche gauche / Q / A  -> voie de gauche
+               Flèche droite / D       -> voie de droite
+               Flèche haut / Z / W     -> NITRO
+               M                       -> couper / remettre le son
+  Fin       :  Espace / Entrée, ou toucher l'écran hors boutons = Rejouer.
+               Boutons : Rejouer, Changer de mode, Changer de joueur.
+  Téléphone :  Glisser le doigt vers la gauche / la droite (n'importe où
+               sur l'écran de jeu ; un long swipe peut changer de 2 voies),
+               toucher la moitié gauche / droite de la route,
+               ou les boutons « Gauche » et « Droite ».
+               Glisser vers le HAUT (ou bouton 🔥) -> NITRO
+               Les écrans HTML gèrent leurs propres boutons : un toucher
+               sur un écran ne déclenche jamais un swipe de jeu.
+               Le jeu s'adapte à la taille de l'écran (portrait et paysage)
+               et reste net sur les écrans haute densité.
   Bouton 🔊     -> son activé / coupé (mémorisé)
+
+ÉCRANS
+  - Accueil : saisie du nom + noms récents.
+  - Choix du mode : cartes générées depuis MODES (Esquive disponible,
+    Course / Chrono / Zen / Défi marqués « Bientôt »), record affiché
+    pour chaque mode et le joueur courant, dernier mode joué mis en avant.
+  - Règles : 3 lignes de règles avant de lancer le mode.
+  - Fin de partie : score, combo max, frôlements, distance parcourue,
+    message de record, puis Rejouer / Changer de mode / Changer de joueur.
+  Le compte à rebours reste dessiné sur le Canvas et les messages
+  (départ, météo, accident) restent dans la barre #message ; l'ancien écran
+  « Prêt ? » est remplacé par l'accueil HTML.
+
+DIFFICULTÉ
+  Choisie sur l'écran de mode, mémorisée pour la prochaine partie.
+  Un seul tableau (DIFFICULTES dans script.js) regroupe les réglages :
+    réglage              facile  normal  difficile
+    vitesse de départ      70      90       110   km/h
+    vitesse maximale      140     180       220   km/h
+    densité du trafic     0,7     1,0       1,3
+    probabilité verglas   15 %    30 %      50 %
+    réflexe rivaux        0,6 s   0,4 s     0,2 s   (modes futurs)
+    temps checkpoint      20 s    15 s      10 s    (modes futurs)
+    multiplicateur score  0,8     1,0       1,3
+  La densité agit sur l'écart entre les vagues de voitures, la probabilité
+  de verglas sur le choix pluie/verglas, et le multiplicateur sur les points.
+
+RECORDS
+  Chaque joueur a son record par mode (clé locale record.<mode>.<nom>).
+  Le record affiché dans le tableau de bord et sur les cartes est celui
+  du joueur et du mode courants. Au premier nom validé, l'ancien record
+  unique (recordVoiture) est repris comme record Esquive de ce joueur.
 
 RÈGLES
   - Évitez les voitures qui arrivent : chaque voiture dépassée rapporte
@@ -43,9 +86,11 @@ RÈGLES
     la voiture glisse beaucoup plus loin.
     FLAQUES (pluie) : aquaplaning, μ = 0,10 et la voiture est déviée.
     PLAQUES DE VERGLAS : μ = 0,06.
-  - La vitesse augmente avec le nombre de voitures dépassées
-    (90 km/h au départ, 180 km/h max, +70 km/h avec le nitro).
-  - Une collision termine la partie. Le meilleur score est conservé.
+  - La vitesse augmente avec le nombre de voitures dépassées ; le départ,
+    le plafond et la densité du trafic dépendent de la difficulté choisie
+    (voir DIFFICULTÉ). Le nitro ajoute +70 km/h.
+  - Une collision termine la partie. Le meilleur score du joueur pour ce
+    mode est conservé (record par joueur et par mode).
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
   - Moteur : m·a = F_moteur − F_traînée − F_roulement,

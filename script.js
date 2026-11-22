@@ -8,12 +8,14 @@
      3. Chargement des images
      4. Sons (Web Audio API, sons synthétisés : aucun fichier externe)
      5. État du jeu (joueur, obstacles, score…)
+     5bis. Écrans HTML : accueil, choix du mode, règles, fin de partie
      6. Commandes : clavier, boutons, swipe et toucher (écran tactile)
      7. Physique : moteur, direction, trafic, collisions, accident
      8. Dessin de la scène
      9. Boucle d'animation, démarrage et fin de partie
    Bonus : nitro, frôlements, combos, cycle jour / nuit avec phares,
-           météo (pluie, verglas) qui change l'adhérence des pneus
+           météo (pluie, verglas) qui change l'adhérence des pneus,
+           difficultés et records par joueur / mode
    ===================================================================== */
 
 /* ---------- 1. Éléments HTML ---------- */
@@ -29,7 +31,33 @@ const boutonRecommencer = document.getElementById("boutonRecommencer");
 const boutonSon = document.getElementById("boutonSon");
 const boutonNitro = document.getElementById("boutonNitro");
 
-console.log("Éléments trouvés :", { canvas, ctx, affichageScore, zoneMessage, boutonGauche, boutonDroite, boutonRecommencer });
+/* Écrans HTML (le designer fournit ce markup ; on reste tolérant s'il manque) */
+const ecrans = document.getElementById("ecrans");
+const ecranAccueil = document.getElementById("ecranAccueil");
+const nomJoueurChamp = document.getElementById("nomJoueur");
+const erreurNom = document.getElementById("erreurNom");
+const boutonContinuer = document.getElementById("boutonContinuer");
+const nomsRecents = document.getElementById("nomsRecents");
+const ecranChoixMode = document.getElementById("ecranChoixMode");
+const joueurActuel = document.getElementById("joueurActuel");
+const boutonChangerJoueur = document.getElementById("boutonChangerJoueur");
+const cartesModes = document.getElementById("cartesModes");
+const ecranRegles = document.getElementById("ecranRegles");
+const reglesTitre = document.getElementById("reglesTitre");
+const reglesTexte = document.getElementById("reglesTexte");
+const caseNePlusAfficher = document.getElementById("caseNePlusAfficher");
+const boutonFermerRegles = document.getElementById("boutonFermerRegles");
+const boutonLancerMode = document.getElementById("boutonLancerMode");
+const ecranFin = document.getElementById("ecranFin");
+const finTitre = document.getElementById("finTitre");
+const finResultat = document.getElementById("finResultat");
+const finDetails = document.getElementById("finDetails");
+const finMessage = document.getElementById("finMessage");
+const boutonRejouer = document.getElementById("boutonRejouer");
+const boutonChangerMode = document.getElementById("boutonChangerMode");
+const boutonChangerJoueurFin = document.getElementById("boutonChangerJoueurFin");
+const radiosDifficulte = document.querySelectorAll('input[name="difficulte"]');
+
 
 /* ---------- 2. Constantes ---------- */
 const LARGEUR = canvas.width;   // 360
@@ -65,10 +93,112 @@ const RAIDEUR = 130;            // 1/s²
 const AMORTISSEMENT = 19;       // 1/s
 const ACCEL_LATERALE_MAX = 2600;// px/s² sur route sèche (proportionnel à l'adhérence)
 
-// Vitesses (km/h)
-const VITESSE_DEPART_KMH = 90;
-const VITESSE_MAX_KMH = 180;
+// Vitesse du trafic (km/h) : commune à tous les modes
 const VITESSE_TRAFIC_KMH = 50;
+
+/* Difficultés : un seul tableau à modifier pour régler le jeu.
+   Les champs non encore utilisés (reflexeRivaux, tempsCheckpoint) sont prêts
+   pour les modes à rivaux / chrono. */
+const DIFFICULTES = {
+  facile:    { nom: "Facile",    vitesseDepart: 70,  vitesseMax: 140, densiteTrafic: 0.7, probabiliteVerglas: 0.15, reflexeRivaux: 0.6, tempsCheckpoint: 20, multiplicateurScore: 0.8 },
+  normal:    { nom: "Normal",    vitesseDepart: 90,  vitesseMax: 180, densiteTrafic: 1,   probabiliteVerglas: 0.3,  reflexeRivaux: 0.4, tempsCheckpoint: 15, multiplicateurScore: 1 },
+  difficile: { nom: "Difficile", vitesseDepart: 110, vitesseMax: 220, densiteTrafic: 1.3, probabiliteVerglas: 0.5,  reflexeRivaux: 0.2, tempsCheckpoint: 10, multiplicateurScore: 1.3 }
+};
+
+/* Modes de jeu. Ajouter un mode = ajouter une entrée ici (+ d'éventuels
+   réglages dans les crochets preparerMode / mettreAJourMode / verifierFinMode). */
+const MODES = {
+  esquive: {
+    nom: "Esquive",
+    icone: "🚗💨",
+    but: "Évite le trafic",
+    regles: [
+      "Évite les voitures qui arrivent sur les 3 voies.",
+      "Enchaîne les frôlements pour recharger le nitro et doubler tes points.",
+      "Une collision termine la partie : bats ton record !"
+    ],
+    trafic: true,
+    rivaux: false,
+    collisionFatale: true,
+    distanceCible: null,
+    tempsLimite: null,
+    score: "points",
+    meteo: true,
+    disponible: true
+  },
+  course: {
+    nom: "Course",
+    icone: "🏁",
+    but: "Bats tes rivaux",
+    regles: [
+      "Affronte des rivaux sur la route.",
+      "Franchis la ligne d'arrivée le premier.",
+      "Bientôt disponible dans une prochaine version."
+    ],
+    trafic: true,
+    rivaux: true,
+    collisionFatale: true,
+    distanceCible: 3000,
+    tempsLimite: null,
+    score: "position",
+    meteo: true,
+    disponible: false
+  },
+  chrono: {
+    nom: "Chrono",
+    icone: "⏱️",
+    but: "Bats le chrono",
+    regles: [
+      "Parcours la distance le plus vite possible.",
+      "Chaque seconde compte, sans sortir de la route.",
+      "Bientôt disponible dans une prochaine version."
+    ],
+    trafic: true,
+    rivaux: false,
+    collisionFatale: true,
+    distanceCible: 2000,
+    tempsLimite: 90,
+    score: "temps",
+    meteo: true,
+    disponible: false
+  },
+  zen: {
+    nom: "Zen",
+    icone: "🌿",
+    but: "Roule sans pression",
+    regles: [
+      "Aucune collision fatale : roule à ton rythme.",
+      "Parcours la plus grande distance possible.",
+      "Bientôt disponible dans une prochaine version."
+    ],
+    trafic: true,
+    rivaux: false,
+    collisionFatale: false,
+    distanceCible: null,
+    tempsLimite: null,
+    score: "distance",
+    meteo: true,
+    disponible: false
+  },
+  defi: {
+    nom: "Défi",
+    icone: "🎯",
+    but: "Un objectif surprise",
+    regles: [
+      "Un défi différent à chaque partie.",
+      "Remplis l'objectif avant la fin du temps.",
+      "Bientôt disponible dans une prochaine version."
+    ],
+    trafic: true,
+    rivaux: false,
+    collisionFatale: true,
+    distanceCible: 1500,
+    tempsLimite: 60,
+    score: "points",
+    meteo: true,
+    disponible: false
+  }
+};
 
 // Pas de temps fixe pour une physique identique sur tous les écrans
 const PAS_PHYSIQUE = 1 / 120;
@@ -588,11 +718,87 @@ function ecrireStockage(cle, valeur) {
   }
 }
 
+/* ---------- Préférences, noms et records par joueur / mode ---------- */
+const CLE_ANCIEN_RECORD = "recordVoiture";
+const CLE_DERNIER_NOM = "dernierNom";
+const CLE_NOMS = "nomsJoueurs";
+const CLE_DIFFICULTE = "difficulte";
+const CLE_DERNIER_MODE = "dernierMode";
+const CLE_NE_PLUS_AFFICHER = "nePlusAfficherRegles";
+
+// Nom : 2 à 12 caractères, lettres (accents compris), chiffres, espace ou tiret
+const REGEX_NOM = /^[\p{L}\p{N} -]{2,12}$/u;
+
+function nomValide(texte) {
+  return REGEX_NOM.test(texte.trim());
+}
+
+// Difficulté active (toujours un objet valide, même si le stockage est corrompu)
+function difficulte() {
+  return DIFFICULTES[difficulteActive] || DIFFICULTES.normal;
+}
+
+function cleRecord(mode, nom) {
+  return "record." + mode + "." + nom;
+}
+
+function lireRecord(mode, nom) {
+  if (!nom) return 0;
+  return parseInt(lireStockage(cleRecord(mode, nom), "0"), 10) || 0;
+}
+
+function ecrireRecord(mode, nom, valeur) {
+  if (!nom) return;
+  ecrireStockage(cleRecord(mode, nom), String(valeur));
+}
+
+/* Migration : au premier nom validé, l'ancien record unique (recordVoiture)
+   devient le record du mode Esquive pour ce joueur. */
+function migrerAncienRecord(nom) {
+  if (!nom) return;
+  const cle = cleRecord("esquive", nom);
+  if (lireStockage(cle, null) !== null) return;
+  const ancien = parseInt(lireStockage(CLE_ANCIEN_RECORD, "0"), 10) || 0;
+  if (ancien <= 0) return;
+  ecrireRecord("esquive", nom, ancien);
+  try {
+    localStorage.removeItem(CLE_ANCIEN_RECORD);
+  } catch (e) {
+    /* stockage indisponible : on ignore */
+  }
+}
+
+function lireNomsRecents() {
+  try {
+    const noms = JSON.parse(lireStockage(CLE_NOMS, "[]"));
+    if (!Array.isArray(noms)) return [];
+    return noms
+      .filter(function (nom) { return typeof nom === "string" && nomValide(nom); })
+      .slice(0, 3);
+  } catch (e) {
+    return [];
+  }
+}
+
+// Mémorise le nom : dernier nom + 3 derniers noms distincts
+function memoriserNom(nom) {
+  ecrireStockage(CLE_DERNIER_NOM, nom);
+  const noms = [nom].concat(lireNomsRecents().filter(function (n) { return n !== nom; })).slice(0, 3);
+  ecrireStockage(CLE_NOMS, JSON.stringify(noms));
+}
+
 /* ---------- 5. État du jeu ---------- */
-// États possibles : "attente", "compte", "jeu", "accident", "fini"
-let etat = "attente";
+// États possibles : "accueil", "choixMode", "compte", "jeu", "accident", "fini"
+let etat = "accueil";
 let score = 0;
-let record = parseInt(lireStockage("recordVoiture", "0"), 10) || 0;
+let record = 0;                // record du joueur courant pour le mode courant
+let nomJoueur = "";            // nom validé ("" tant que l'accueil n'est pas franchi)
+let modeActuel = lireStockage(CLE_DERNIER_MODE, "esquive");
+if (!MODES[modeActuel] || !MODES[modeActuel].disponible) modeActuel = "esquive";
+let modeEnAttente = null;      // mode dont on lit les règles
+let difficulteActive = lireStockage(CLE_DIFFICULTE, "normal");
+if (!DIFFICULTES[difficulteActive]) difficulteActive = "normal";
+let derniereFinMode = null;    // résultat éventuel de verifierFinMode()
 let idAnimation = null;
 let tempsPrecedent = 0;
 let reservoirTemps = 0;
@@ -649,7 +855,7 @@ let distanceDanger = 0;  // px parcourus depuis le dernier danger
 let obstacles = [];
 let particules = [];
 
-affichageRecord.textContent = record;
+affichageRecord.textContent = 0;
 boutonSon.textContent = son.actif ? "🔊" : "🔇";
 
 function centreVoie(numeroVoie) {
@@ -667,7 +873,7 @@ function reinitialiserPartie() {
   joueur.angle = 0;
   joueur.rotation = 0;
   joueur.accelerateur = 0;
-  joueur.vitesse = kmhVersPx(VITESSE_DEPART_KMH); // départ lancé
+  joueur.vitesse = kmhVersPx(difficulte().vitesseDepart); // départ lancé
   obstacles = [];
   particules = [];
   traces = [];
@@ -681,8 +887,12 @@ function reinitialiserPartie() {
   dangers = [];
   distanceDanger = 0;
   distanceDepuisVague = 0;
+  defilement = 0;
   tremblement = 0;
   dureeAccident = 0;
+  derniereVitesseAffichee = -1;
+  derniereChargeAffichee = -1;
+  geste = null;
   son.rapport = 1;
   voituresEvitees = 0;
   serie = 0;
@@ -691,12 +901,264 @@ function reinitialiserPartie() {
   ralentiRestant = 0;
   animationCombo = 0;
   textesFlottants = [];
+  derniereFinMode = null;
   nitro.jauge = 1;
   nitro.actif = false;
   nitro.restant = 0;
   zoneMessage.classList.remove("perdu");
+  preparerMode(modeActuel);
 }
-reinitialiserPartie();
+
+/* ---------- 5bis. Écrans HTML et navigation ----------
+   Un seul point d'entrée par écran : afficherEcran() bascule les attributs
+   hidden, les transitions de partie passent par demarrerMode / rejouer. */
+
+// Vrai si un écran HTML recouvre le jeu
+function interfaceOuverte() {
+  return ecrans !== null && !ecrans.hidden;
+}
+
+// Vrai si le clavier doit aller au champ de saisie, pas au jeu
+function saisieActive() {
+  const actif = document.activeElement;
+  return actif !== null && (actif.tagName === "INPUT" || actif.tagName === "TEXTAREA");
+}
+
+function afficherEcran(nom) {
+  const cibles = { accueil: ecranAccueil, choixMode: ecranChoixMode, regles: ecranRegles, fin: ecranFin };
+  const cible = cibles[nom] || null;
+  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin].forEach(function (ecran) {
+    if (ecran) ecran.hidden = ecran !== cible;
+  });
+  if (ecrans) ecrans.hidden = cible === null;
+  // L'écran s'appelle « fin », l'état de la machine s'appelle « fini »
+  if (nom === "fin") etat = "fini";
+  else if (nom !== "regles") etat = nom;
+}
+
+function masquerEcrans() {
+  // Évite qu'un bouton caché garde le focus (Espace/Entrée pendant la partie)
+  const actif = document.activeElement;
+  if (actif && actif !== document.body && typeof actif.blur === "function") actif.blur();
+  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin].forEach(function (ecran) {
+    if (ecran) ecran.hidden = true;
+  });
+  if (ecrans) ecrans.hidden = true;
+}
+
+function rafraichirRecordAffiche() {
+  const nom = nomJoueur || lireStockage(CLE_DERNIER_NOM, "");
+  record = lireRecord(modeActuel, nom);
+  affichageRecord.textContent = record;
+}
+
+/* ---------- Accueil : saisie et validation du nom ---------- */
+function validerChampNom() {
+  const valeur = nomJoueurChamp ? nomJoueurChamp.value.trim() : "";
+  const ok = nomValide(valeur);
+  if (boutonContinuer) boutonContinuer.disabled = !ok;
+  if (erreurNom) {
+    const vide = valeur === "";
+    erreurNom.textContent = ok || vide ? "" : "Ton nom doit faire entre 2 et 12 caractères";
+    erreurNom.hidden = ok || vide;
+  }
+  return ok;
+}
+
+function afficherNomsRecents() {
+  if (!nomsRecents) return;
+  nomsRecents.textContent = "";
+  const noms = lireNomsRecents();
+  nomsRecents.hidden = noms.length === 0;
+  noms.forEach(function (nom) {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "nom-recent";
+    bouton.textContent = nom;
+    bouton.addEventListener("click", function () {
+      if (!nomJoueurChamp) return;
+      nomJoueurChamp.value = nom;
+      validerChampNom();
+      nomJoueurChamp.focus();
+    });
+    nomsRecents.appendChild(bouton);
+  });
+}
+
+function continuerDepuisAccueil() {
+  const valeur = nomJoueurChamp ? nomJoueurChamp.value.trim() : "";
+  if (!nomValide(valeur)) {
+    validerChampNom();
+    if (nomJoueurChamp) nomJoueurChamp.focus();
+    return;
+  }
+  nomJoueur = valeur;
+  memoriserNom(nomJoueur);
+  migrerAncienRecord(nomJoueur);
+  rafraichirRecordAffiche();
+  afficherMessage("Prêt, " + nomJoueur + " ?");
+  afficherChoixMode();
+}
+
+function retourAccueil() {
+  afficherEcran("accueil");
+  if (nomJoueurChamp) nomJoueurChamp.value = nomJoueur || lireStockage(CLE_DERNIER_NOM, "");
+  afficherNomsRecents();
+  validerChampNom();
+}
+
+/* ---------- Choix du mode : cartes générées depuis MODES ---------- */
+function afficherChoixMode() {
+  if (joueurActuel) joueurActuel.textContent = nomJoueur ? "Salut " + nomJoueur + " !" : "";
+  construireCartesModes();
+  afficherEcran("choixMode");
+  const carte = cartesModes ? cartesModes.querySelector(".carte-mode.selectionne:not([disabled])") : null;
+  if (carte) carte.focus();
+}
+
+function construireCartesModes() {
+  if (!cartesModes) return;
+  cartesModes.textContent = "";
+  const nom = nomJoueur || lireStockage(CLE_DERNIER_NOM, "");
+  for (const cle in MODES) {
+    if (!Object.prototype.hasOwnProperty.call(MODES, cle)) continue;
+    const mode = MODES[cle];
+    const carte = document.createElement("button");
+    carte.type = "button";
+    carte.className = "carte-mode";
+    carte.dataset.mode = cle;
+    if (cle === modeActuel) carte.classList.add("selectionne");
+    if (!mode.disponible) carte.disabled = true;
+
+    const icone = document.createElement("span");
+    icone.className = "carte-icone";
+    icone.setAttribute("aria-hidden", "true");
+    icone.textContent = mode.icone;
+    const nomCarte = document.createElement("span");
+    nomCarte.className = "carte-nom";
+    nomCarte.textContent = mode.nom;
+    const but = document.createElement("span");
+    but.className = "carte-but";
+    but.textContent = mode.but;
+    const recordCarte = document.createElement("span");
+    recordCarte.className = "carte-record";
+    recordCarte.textContent = "Record : " + lireRecord(cle, nom);
+
+    carte.appendChild(icone);
+    carte.appendChild(nomCarte);
+    carte.appendChild(but);
+    carte.appendChild(recordCarte);
+    if (!mode.disponible) {
+      const badge = document.createElement("span");
+      badge.className = "bientot";
+      badge.textContent = "Bientôt";
+      carte.appendChild(badge);
+    }
+    carte.addEventListener("click", function () {
+      ouvrirRegles(cle);
+    });
+    cartesModes.appendChild(carte);
+  }
+}
+
+// Flèches / haut-bas : déplace le focus entre les cartes disponibles
+function deplacerFocusCarte(touche) {
+  if (!cartesModes) return;
+  const cartes = Array.prototype.slice.call(cartesModes.querySelectorAll(".carte-mode:not([disabled])"));
+  if (cartes.length === 0) return;
+  const index = cartes.indexOf(document.activeElement);
+  const arriere = touche === "ArrowLeft" || touche === "ArrowUp";
+  const suivant = index === -1 ? 0 : (index + (arriere ? -1 : 1) + cartes.length) % cartes.length;
+  cartes[suivant].focus();
+}
+
+/* ---------- Règles d'un mode ---------- */
+function ouvrirRegles(cle) {
+  const mode = MODES[cle];
+  if (!mode || !mode.disponible) return;
+  modeEnAttente = cle;
+  if (reglesTitre) reglesTitre.textContent = "Règles du mode " + mode.nom;
+  if (reglesTexte) {
+    reglesTexte.textContent = "";
+    mode.regles.forEach(function (ligne) {
+      const li = document.createElement("li");
+      li.textContent = ligne;
+      reglesTexte.appendChild(li);
+    });
+  }
+  const nePlusAfficher = lireStockage(CLE_NE_PLUS_AFFICHER, "0") === "1";
+  if (caseNePlusAfficher) caseNePlusAfficher.checked = nePlusAfficher;
+  if (nePlusAfficher) {
+    demarrerMode(cle);
+    return;
+  }
+  afficherEcran("regles");
+  if (boutonLancerMode) boutonLancerMode.focus();
+}
+
+function fermerRegles() {
+  afficherChoixMode();
+}
+
+/* ---------- Démarrage / fin de partie ---------- */
+function demarrerMode(cle) {
+  const mode = MODES[cle];
+  if (!mode || !mode.disponible) return;
+  modeActuel = cle;
+  ecrireStockage(CLE_DERNIER_MODE, cle);
+  rafraichirRecordAffiche();
+  masquerEcrans();
+  lancerPartie();
+}
+
+function rejouer() {
+  if (!nomJoueur) {
+    retourAccueil();
+    return;
+  }
+  masquerEcrans();
+  lancerPartie();
+}
+
+function remplirEcranFin(ancienRecord) {
+  const scoreFinal = Math.round(score);
+  const metres = Math.round(defilement / PX_PAR_METRE);
+  if (finTitre) finTitre.textContent = "Bien joué " + nomJoueur + " : " + scoreFinal + " points !";
+  if (finResultat) finResultat.textContent = scoreFinal + " points";
+  if (finDetails) {
+    finDetails.textContent = "Combo max ×" + multiplicateurMaxPartie
+      + " • Frôlements : " + nbFrolements
+      + " • Distance : " + metres + " m";
+  }
+  if (finMessage) {
+    const ecart = ancienRecord - scoreFinal;
+    if (scoreFinal > ancienRecord) {
+      finMessage.textContent = "Bravo " + nomJoueur + ", nouveau record !";
+    } else {
+      finMessage.textContent = "Presque, " + nomJoueur + " : " + ecart
+        + " point" + (ecart > 1 ? "s" : "") + " de ton record";
+    }
+  }
+}
+
+/* ---------- Crochets de mode ----------
+   Esquive utilise exactement la boucle et le score historiques.
+   Pour un nouveau mode : compléter ces quatre fonctions (et MODES). */
+function preparerMode(mode) {
+  // Aucun réglage supplémentaire pour Esquive.
+}
+
+function mettreAJourMode(dt) {
+  // Aucune mise à jour spécifique pour Esquive.
+}
+
+function verifierFinMode() {
+  return null;
+}
+
+function dessinerInterfaceMode() {
+  // Aucun élément d'interface supplémentaire pour Esquive.
+}
 
 /* ---------- 6. Commandes ---------- */
 function allerAGauche() {
@@ -719,6 +1181,41 @@ function allerADroite() {
 
 document.addEventListener("keydown", function (evenement) {
   const touche = evenement.key;
+
+  // Le champ de saisie garde la main (Espace et Entrée compris)
+  if (saisieActive()) return;
+
+  // Un écran HTML est ouvert : navigation seulement, aucune commande de jeu
+  if (interfaceOuverte()) {
+    const reglesOuvertes = ecranRegles !== null && !ecranRegles.hidden;
+    if (touche === "Escape") {
+      evenement.preventDefault();
+      if (reglesOuvertes) fermerRegles();
+      else if (etat === "choixMode") retourAccueil();
+      return;
+    }
+    if (reglesOuvertes) return;
+    if (touche === "Enter" && etat === "accueil") {
+      const actif = document.activeElement;
+      if (actif && actif.tagName === "BUTTON") return; // le bouton focalisé agit
+      evenement.preventDefault();
+      continuerDepuisAccueil();
+      return;
+    }
+    if (etat === "choixMode" && (touche === "ArrowLeft" || touche === "ArrowRight" || touche === "ArrowUp" || touche === "ArrowDown")) {
+      evenement.preventDefault();
+      deplacerFocusCarte(touche);
+      return;
+    }
+    if ((touche === " " || touche === "Enter") && etat === "fini") {
+      const actif = document.activeElement;
+      if (actif && actif.tagName === "BUTTON") return; // le bouton focalisé agit
+      evenement.preventDefault();
+      rejouer();
+    }
+    return;
+  }
+
   if (touche === "ArrowLeft" || touche === "ArrowRight" || touche === "ArrowUp" || touche === " ") {
     evenement.preventDefault();
   }
@@ -726,7 +1223,7 @@ document.addEventListener("keydown", function (evenement) {
 
   if (touche === "ArrowLeft" || touche === "q" || touche === "a") allerAGauche();
   else if (touche === "ArrowRight" || touche === "d") allerADroite();
-  else if ((touche === " " || touche === "Enter") && (etat === "attente" || etat === "fini")) lancerPartie();
+  else if ((touche === " " || touche === "Enter") && etat === "fini") rejouer();
   else if (touche === "ArrowUp" || touche === "z" || touche === "w" || touche === "Shift") activerNitro();
   else if (touche === "m") basculerSon();
 });
@@ -741,7 +1238,15 @@ boutonDroite.addEventListener("click", function () {
   boutonDroite.blur();
 });
 boutonRecommencer.addEventListener("click", function () {
-  lancerPartie();
+  if (etat === "accueil") {
+    if (nomJoueurChamp) nomJoueurChamp.focus();
+  } else if (etat === "choixMode") {
+    afficherChoixMode();
+  } else if (!nomJoueur) {
+    retourAccueil();
+  } else {
+    rejouer();
+  }
   boutonRecommencer.blur();
 });
 boutonNitro.addEventListener("click", function () {
@@ -765,8 +1270,9 @@ const DUREE_TOUCHER = 350;   // ms
 let geste = null;
 
 document.addEventListener("pointerdown", function (evenement) {
-  if (evenement.target.closest("button")) return; // les boutons gardent leur rôle
-  if (geste !== null) return;                      // un seul doigt suivi à la fois
+  if (evenement.target.closest("#ecrans")) return;  // les écrans HTML gèrent leurs propres touchers
+  if (evenement.target.closest("button")) return;   // les boutons gardent leur rôle
+  if (geste !== null) return;                       // un seul doigt suivi à la fois
   evenement.preventDefault();
   geste = {
     id: evenement.pointerId,
@@ -805,9 +1311,7 @@ document.addEventListener("pointerup", function (evenement) {
   const simpleToucher = !geste.aGlisse && distance < SEUIL_TOUCHER && duree < DUREE_TOUCHER;
 
   if (simpleToucher) {
-    if (etat === "attente" || etat === "fini") {
-      lancerPartie();
-    } else if (geste.surCanvas) {
+    if (geste.surCanvas && (etat === "jeu" || etat === "compte")) {
       const rect = canvas.getBoundingClientRect();
       if (evenement.clientX - rect.left < rect.width / 2) allerAGauche();
       else allerADroite();
@@ -890,7 +1394,14 @@ function mettreAJour(dt) {
     mettreAJourCompteARebours(dt);
   } else if (etat === "jeu") {
     creerVaguesDeTrafic(dt);
-    verifierObstaclesEvites();
+    verifierObstaclesEvites();      // scoring (points, combo, frôlements)
+    mettreAJourMode(dt);            // crochet du mode actif
+    const fin = verifierFinMode();  // crochet de fin (null pour Esquive)
+    if (fin) {
+      derniereFinMode = fin;
+      terminerPartie();
+      return;
+    }
     verifierCollisions();
   }
 }
@@ -899,7 +1410,8 @@ function mettreAJour(dt) {
    La force du moteur est limitée par la puissance (F = P / v) et par l'adhérence des pneus. */
 function mettreAJourMoteur(dt) {
   const v = joueur.vitesse / PX_PAR_METRE;                       // m/s
-  let vitesseCibleKmh = Math.min(VITESSE_MAX_KMH, VITESSE_DEPART_KMH + voituresEvitees * 2.5);
+  const D = difficulte();
+  let vitesseCibleKmh = Math.min(D.vitesseMax, D.vitesseDepart + voituresEvitees * 2.5);
   if (nitro.actif) vitesseCibleKmh += NITRO_BONUS_KMH;
   vitesseCibleKmh *= facteurMeteo("vitesseMax");
   const vCible = vitesseCibleKmh / 3.6;
@@ -1011,14 +1523,17 @@ function vitesseRelativeTrafic() {
 }
 
 function creerVaguesDeTrafic(dt) {
+  const mode = MODES[modeActuel];
+  if (!mode || !mode.trafic) return;
   const vRel = vitesseRelativeTrafic();
   if (vRel <= 0) return;
   distanceDepuisVague += vRel * dt;
 
   // Écart entre deux vagues : au moins ≈ 0,85 s pour pouvoir changer de voie
-  // Sur route glissante, on laisse plus de temps pour changer de voie
+  // Sur route glissante, on laisse plus de temps pour changer de voie.
+  // La densité de la difficulté resserre (ou desserre) les vagues.
   const tempsReaction = 0.85 + 0.7 * (1 - adherence() / ADHERENCE);
-  const ecart = VOITURE_HAUTEUR + Math.max(160, vRel * tempsReaction);
+  const ecart = (VOITURE_HAUTEUR + Math.max(160, vRel * tempsReaction)) / difficulte().densiteTrafic;
   if (distanceDepuisVague >= ecart) {
     distanceDepuisVague = 0;
     creerVague();
@@ -1122,6 +1637,8 @@ function seChevauchent(a, b) {
 }
 
 function verifierCollisions() {
+  const mode = MODES[modeActuel];
+  if (!mode || !mode.collisionFatale) return;
   const rectJoueur = rectangle(joueur);
   for (const o of obstacles) {
     if (seChevauchent(rectJoueur, rectangle(o))) {
@@ -1258,9 +1775,12 @@ function mettreAJourParticules(dt) {
 
 /* ---------- Bonus : score, combos, frôlements, nitro ---------- */
 function ajouterPoints(points, x, y) {
-  score += points;
-  affichageScore.textContent = score;
-  ajouterTexteFlottant("+" + points, x, y, "#ffffff", 20);
+  // Le score reste flottant en interne : le multiplicateur de difficulté
+  // (0,8 / 1 / 1,3) s'applique sans arrondi cumulatif.
+  const gagnes = points * difficulte().multiplicateurScore;
+  score += gagnes;
+  affichageScore.textContent = Math.round(score);
+  ajouterTexteFlottant("+" + Math.round(gagnes), x, y, "#ffffff", 20);
 }
 
 function multiplicateur() {
@@ -1441,10 +1961,13 @@ function mettreAJourMeteo(dt) {
   creerEffetsMeteo();
 }
 
-// Après le sec : pluie (60 %) ou verglas (40 %). Après pluie ou verglas : retour au sec.
+// Après le sec : pluie ou verglas selon la difficulté. Puis retour au sec.
 function changerMeteo() {
+  const mode = MODES[modeActuel];
   let suivante = "sec";
-  if (meteo.actuelle === "sec") suivante = Math.random() < 0.6 ? "pluie" : "verglas";
+  if (meteo.actuelle === "sec" && mode && mode.meteo) {
+    suivante = Math.random() < difficulte().probabiliteVerglas ? "verglas" : "pluie";
+  }
   meteo.actuelle = suivante;
   meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M * (0.8 + Math.random() * 0.4);
   meteo.annonce = 2.6;
@@ -1772,6 +2295,9 @@ function dessinerInterfaceJeu() {
   ctx.fillStyle = nitro.actif ? "#5ee7ff" : (clignote ? "#ffffff" : "#ff9a3c");
   const h = hauteurJauge * nitro.jauge;
   ctx.fillRect(xJauge - 7, 30 + hauteurJauge - h, 14, h);
+
+  // Interface propre au mode actif (no-op pour Esquive)
+  dessinerInterfaceMode();
 }
 
 // Route mouillée (plus sombre, reflets) ou givrée (voile bleuté)
@@ -1972,6 +2498,7 @@ function dessinerTexteSurCanvas() {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
+  // Le « Prêt ? » et l'écran de fin sont désormais des écrans HTML.
   if (etat === "compte") {
     const nombre = Math.ceil(compteARebours);
     const progression = compteARebours - Math.floor(compteARebours);
@@ -1981,28 +2508,6 @@ function dessinerTexteSurCanvas() {
     ctx.lineWidth = 6;
     ctx.strokeText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
     ctx.fillText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
-  } else if (etat === "attente" || etat === "fini") {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(0, HAUTEUR / 2 - 90, LARGEUR, etat === "fini" ? 175 : 150);
-    ctx.fillStyle = etat === "fini" ? "#ff5a5a" : "#ffd23f";
-    ctx.font = "bold 30px Arial";
-    ctx.fillText(etat === "fini" ? "Partie terminée" : "Prêt ?", LARGEUR / 2, HAUTEUR / 2 - 55);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "18px Arial";
-    if (etat === "fini") {
-      ctx.fillText("Score : " + score + "   •   Record : " + record, LARGEUR / 2, HAUTEUR / 2 - 18);
-      ctx.font = "15px Arial";
-      ctx.fillStyle = "#ffd23f";
-      ctx.fillText("Combo max ×" + multiplicateurMaxPartie + "   •   Frôlements : " + nbFrolements, LARGEUR / 2, HAUTEUR / 2 + 12);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "16px Arial";
-      ctx.fillText("Touchez l'écran ou appuyez sur Espace", LARGEUR / 2, HAUTEUR / 2 + 50);
-    } else {
-      ctx.fillText("Glissez ← → pour changer de voie", LARGEUR / 2, HAUTEUR / 2 - 18);
-      ctx.fillText("Glissez ↑ pour le NITRO", LARGEUR / 2, HAUTEUR / 2 + 8);
-      ctx.font = "16px Arial";
-      ctx.fillText("Touchez l'écran ou appuyez sur Espace", LARGEUR / 2, HAUTEUR / 2 + 40);
-    }
   }
 }
 
@@ -2054,6 +2559,10 @@ function boucle(temps) {
 }
 
 function lancerPartie() {
+  if (!nomJoueur) {
+    retourAccueil();
+    return;
+  }
   initialiserSon();
 
   // Une seule boucle à la fois : on annule l'éventuelle boucle précédente
@@ -2063,6 +2572,7 @@ function lancerPartie() {
   }
 
   reinitialiserPartie();
+  masquerEcrans();
   etat = "compte";
   compteARebours = 3;
   jouerBip(523, 0.25, "square", 0.12);
@@ -2079,17 +2589,76 @@ function lancerPartie() {
 function terminerPartie() {
   etat = "fini";
   couperSonsContinus();
-  if (score > record) {
+  score = Math.round(score);
+
+  // Record mis à jour AVANT l'affichage de l'écran de fin
+  const ancienRecord = lireRecord(modeActuel, nomJoueur);
+  if (score > ancienRecord) {
     record = score;
-    ecrireStockage("recordVoiture", String(record));
+    ecrireRecord(modeActuel, nomJoueur, record);
     affichageRecord.textContent = record;
     afficherMessage("Partie terminée — nouveau record : " + score + " !");
     jouerBip(784, 0.2, "triangle", 0.15);
     jouerBip(1046, 0.3, "triangle", 0.15, 0.15);
     jouerBip(1318, 0.5, "triangle", 0.15, 0.3);
   } else {
-    afficherMessage("Partie terminée — score : " + score + ". Appuyez sur Recommencer.");
+    record = ancienRecord;
+    affichageRecord.textContent = record;
+    afficherMessage("Partie terminée — score : " + score + ".");
   }
+
+  remplirEcranFin(ancienRecord);
+  afficherEcran("fin");
+  if (boutonRejouer) boutonRejouer.focus();
+}
+
+// Câblage unique des nouveaux écrans (le markup est fourni par le designer)
+function initialiserInterface() {
+  radiosDifficulte.forEach(function (radio) {
+    radio.checked = radio.value === difficulteActive;
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      difficulteActive = radio.value;
+      ecrireStockage(CLE_DIFFICULTE, difficulteActive);
+    });
+  });
+
+  if (nomJoueurChamp) {
+    nomJoueurChamp.addEventListener("input", validerChampNom);
+    nomJoueurChamp.addEventListener("keydown", function (evenement) {
+      if (evenement.key !== "Enter") return;
+      evenement.preventDefault();
+      continuerDepuisAccueil();
+    });
+  }
+  if (boutonContinuer) boutonContinuer.addEventListener("click", continuerDepuisAccueil);
+  if (boutonChangerJoueur) boutonChangerJoueur.addEventListener("click", retourAccueil);
+  if (boutonFermerRegles) boutonFermerRegles.addEventListener("click", fermerRegles);
+  if (boutonLancerMode) {
+    boutonLancerMode.addEventListener("click", function () {
+      if (modeEnAttente) demarrerMode(modeEnAttente);
+    });
+  }
+  if (caseNePlusAfficher) {
+    caseNePlusAfficher.addEventListener("change", function () {
+      ecrireStockage(CLE_NE_PLUS_AFFICHER, caseNePlusAfficher.checked ? "1" : "0");
+    });
+  }
+  if (boutonRejouer) boutonRejouer.addEventListener("click", rejouer);
+  if (boutonChangerMode) boutonChangerMode.addEventListener("click", afficherChoixMode);
+  if (boutonChangerJoueurFin) boutonChangerJoueurFin.addEventListener("click", retourAccueil);
+  if (ecrans) {
+    // Toucher l'écran de fin (hors boutons) = rejouer
+    ecrans.addEventListener("click", function (evenement) {
+      if (etat !== "fini") return;
+      if (evenement.target.closest("button")) return;
+      rejouer();
+    });
+  }
+
+  reinitialiserPartie();
+  rafraichirRecordAffiche();
+  retourAccueil();
 }
 
 // Vibration du téléphone (si le navigateur l'autorise)
@@ -2111,3 +2680,6 @@ document.addEventListener("visibilitychange", function () {
   if (document.hidden) son.contexte.suspend();
   else son.contexte.resume();
 });
+
+// Démarrage : tous les écrans sont câblés, on ouvre l'accueil
+initialiserInterface();
