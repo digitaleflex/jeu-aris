@@ -1,0 +1,25 @@
+{
+  "name": "jeu-aris",
+  "version": "0.6.0",
+  "description": "Jeu de voiture en JavaScript et Canvas : évitez le trafic sur une route à trois voies, avec physique réaliste, météo, nitro et sons synthétisés.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test \"tests/unitaires/**/*.test.js\"",
+    "test:e2e": "node --test \"tests/e2e/**/*.e2e.mjs\"",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:verifier": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "playwright": "^1.65.1",
+    "prettier": "^3.10.1"
+  }
+}

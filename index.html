@@ -1,42 +1,69 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Jeu de voiture</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <main class="jeu">
-    <header class="entete">
-      <h1>Course sur 3 voies</h1>
-      <button id="boutonSon" class="bouton-son" type="button" aria-label="Couper le son">🔊</button>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="Jeu de voiture en JavaScript et Canvas : évitez le trafic sur une route à trois voies, avec une physique réaliste, de la météo et des sons synthétisés."
+    />
+    <title>Course sur 3 voies</title>
+    <link rel="icon" type="image/svg+xml" href="images/icone.svg" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <main class="jeu">
+      <header class="entete">
+        <h1>Course sur 3 voies</h1>
+        <button id="boutonSon" class="bouton-son" type="button" aria-label="Couper le son">
+          🔊
+        </button>
+      </header>
 
-    <div class="tableau-bord">
-      <p>Score : <strong id="score">0</strong></p>
-      <p>Record : <strong id="record">0</strong></p>
-      <p>Vitesse : <strong id="vitesse">0</strong> km/h</p>
-    </div>
+      <div class="tableau-bord">
+        <p>Score : <strong id="score">0</strong></p>
+        <p>Record : <strong id="record">0</strong></p>
+        <p>Vitesse : <strong id="vitesse">0</strong> km/h</p>
+      </div>
 
-    <div class="zone-canvas">
-      <canvas id="canvasJeu" width="360" height="540">
-        Votre navigateur ne gère pas le Canvas.
-      </canvas>
-    </div>
+      <div class="zone-canvas">
+        <canvas id="canvasJeu" width="360" height="540">
+          Votre navigateur ne gère pas le Canvas.
+        </canvas>
+      </div>
 
-    <div class="commandes">
-      <button id="boutonGauche" class="bouton-direction" type="button" aria-label="Gauche">◀ Gauche</button>
-      <button id="boutonNitro" class="bouton-nitro" type="button" aria-label="Nitro">🔥<span>NITRO</span></button>
-      <button id="boutonDroite" class="bouton-direction" type="button" aria-label="Droite">Droite ▶</button>
-    </div>
+      <div class="commandes">
+        <button id="boutonGauche" class="bouton-direction" type="button" aria-label="Gauche">
+          ◀ Gauche
+        </button>
+        <button id="boutonNitro" class="bouton-nitro" type="button" aria-label="Nitro">
+          🔥<span>NITRO</span>
+        </button>
+        <button id="boutonDroite" class="bouton-direction" type="button" aria-label="Droite">
+          Droite ▶
+        </button>
+      </div>
 
-    <div class="pied">
-      <p id="message" class="message">Glissez le doigt ou utilisez les flèches.</p>
-      <button id="boutonRecommencer" class="bouton-recommencer" type="button">Démarrer</button>
-    </div>
-  </main>
+      <div class="pied">
+        <p id="message" class="message">Glissez le doigt ou utilisez les flèches.</p>
+        <button id="boutonRecommencer" class="bouton-recommencer" type="button">Démarrer</button>
+      </div>
+    </main>
 
-  <script src="script.js"></script>
-</body>
+    <!-- Le jeu est découpé en modules ES : il doit être servi par http(s), pas ouvert via file:// -->
+    <p id="erreurChargement" class="erreur-chargement" role="alert" hidden>
+      Ce jeu utilise des modules JavaScript et ne peut pas s'ouvrir directement depuis un fichier.
+      Lancez <code>npm start</code> (ou <code>python3 -m http.server</code>) dans le dossier du
+      projet, puis ouvrez <code>http://localhost:8080</code>.
+    </p>
+    <script>
+      if (location.protocol === 'file:') {
+        document.getElementById('erreurChargement').hidden = false;
+      }
+    </script>
+    <script type="module" src="src/main.js"></script>
+  </body>
 </html>
