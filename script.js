@@ -142,7 +142,7 @@ const MODES = {
     tempsLimite: null,
     score: "position",
     meteo: true,
-    disponible: false
+    disponible: true
   },
   chrono: {
     nom: "Chrono",
@@ -198,6 +198,19 @@ const MODES = {
     meteo: true,
     disponible: false
   }
+};
+
+/* ---------- Course : constantes et personnalités des pilotes ----------
+   Tout ce qui règle la course est regroupé ici pour être expliqué à l'oral. */
+const COURSE_DISTANCE_M = 3000;        // 3 km
+const COURSE_DENSITE_TRAFIC = 0.6;     // trafic civil moins dense qu'en Esquive
+const COURSE_PENALITE_S = 2;           // pénalité après un choc avec le trafic
+const COURSE_DEMARRAGE_FEUX = 5;       // feux rouges de la grille
+
+const PILOTES = {
+  rapide:   { nom: "Rapide",   agressivite: 0.9, reflexes: 1.15, risque: 0.9,  nitro: true,  pluieFacteur: 1,    couleur: "#ff5b5b" },
+  prudent:  { nom: "Prudent",  agressivite: 0.25, reflexes: 1.35, risque: 0.15, nitro: false, pluieFacteur: 0.9,  couleur: "#5b9dff" },
+  regulier: { nom: "Régulier", agressivite: 0.55, reflexes: 1,    risque: 0.35, nitro: false, pluieFacteur: 1,    couleur: "#ffd23f" }
 };
 
 // Pas de temps fixe pour une physique identique sur tous les écrans
@@ -410,7 +423,38 @@ function mettreAJourSonContinu(vitesseMs, accelerateur, accelLaterale, enMarche)
   son.chausseeMouillee.gain.gain.setTargetAtTime(enMarche ? 0.16 * pluie * limiter(vitesseMs / 40, 0, 1) : 0, t, 0.2);
 }
 
+/* Chaque rival a son propre moteur : hauteur différente, volume selon la distance. */
+function mettreAJourSonRivaux() {
+  if (!son.contexte || modeActuel !== "course" || !course) return;
+  const ac = son.contexte;
+  const t = ac.currentTime;
+  if (!son.rivauxMoteurs) son.rivauxMoteurs = [];
+  while (son.rivauxMoteurs.length < rivaux.length) {
+    const osc = ac.createOscillator();
+    osc.type = "sawtooth";
+    const gain = ac.createGain();
+    gain.gain.value = 0;
+    osc.connect(gain);
+    gain.connect(son.general);
+    osc.start();
+    son.rivauxMoteurs.push({ osc: osc, gain: gain });
+  }
+  son.rivauxMoteurs.forEach(function (m, i) {
+    const r = rivaux[i];
+    if (!r) return;
+    const hauteur = [0.92, 1, 1.12][i % 3];
+    m.osc.frequency.setTargetAtTime(limiter((r.vitesse / PX_PAR_METRE) * 12 * hauteur, 60, 260), t, 0.05);
+    const proche = limiter(1 - Math.abs(r.distance - course.distance) / 60, 0, 1);
+    m.gain.gain.setTargetAtTime(proche * 0.035, t, 0.1);
+  });
+}
+
 function couperSonsContinus() {
+  if (son.contexte && son.rivauxMoteurs) {
+    son.rivauxMoteurs.forEach(function (m) {
+      m.gain.gain.setTargetAtTime(0, son.contexte.currentTime, 0.1);
+    });
+  }
   mettreAJourSonContinu(0, 0, 0, false);
 }
 
@@ -855,6 +899,10 @@ let distanceDanger = 0;  // px parcourus depuis le dernier danger
 let obstacles = [];
 let particules = [];
 
+/* État propre à la course : temps, pénalités, classement et rivaux. */
+let course = null;
+let rivaux = [];
+
 affichageRecord.textContent = 0;
 boutonSon.textContent = son.actif ? "🔊" : "🔇";
 
@@ -946,10 +994,54 @@ function masquerEcrans() {
   if (ecrans) ecrans.hidden = true;
 }
 
+// Format lisible mm:ss,centièmes pour les records de temps.
+function formatTemps(secondes) {
+  if (!secondes || secondes <= 0) return "—";
+  const total = Math.round(secondes * 100);
+  const centiemes = total % 100;
+  const secondesPleines = Math.floor(total / 100);
+  const minutes = Math.floor(secondesPleines / 60);
+  const reste = secondesPleines % 60;
+  return minutes + ":" + String(reste).padStart(2, "0") + "," + String(centiemes).padStart(2, "0");
+}
+
 function rafraichirRecordAffiche() {
   const nom = nomJoueur || lireStockage(CLE_DERNIER_NOM, "");
   record = lireRecord(modeActuel, nom);
-  affichageRecord.textContent = record;
+  affichageRecord.textContent = modeActuel === "course" ? formatTemps(record) : record;
+}
+
+/* Fin de course : classement, temps total, pénalités et meilleur temps. */
+function terminerCourse() {
+  if (!course) return;
+  const temps = course.temps + course.penalty;
+  const ancien = lireRecord("course", nomJoueur);
+  const nouveauRecord = ancien <= 0 || temps < ancien;
+  if (nouveauRecord) {
+    record = temps;
+    ecrireRecord("course", nomJoueur, temps);
+    affichageRecord.textContent = formatTemps(temps);
+    jouerBip(784, 0.2, "triangle", 0.15);
+    jouerBip(1046, 0.3, "triangle", 0.15, 0.15);
+  } else {
+    record = ancien;
+    affichageRecord.textContent = formatTemps(ancien);
+  }
+  if (finTitre) finTitre.textContent = "Bien joué " + nomJoueur + " : " + course.position + (course.position === 1 ? "er" : "e") + " !";
+  if (finResultat) finResultat.textContent = course.position + (course.position === 1 ? "er" : "e") + " / 4";
+  if (finDetails) {
+    finDetails.textContent = "Temps : " + formatTemps(temps)
+      + " • Pénalités : +" + course.penalty.toFixed(0) + " s"
+      + " • Distance : " + Math.round(Math.min(COURSE_DISTANCE_M, course.distance)) + " m";
+  }
+  if (finMessage) {
+    finMessage.textContent = nouveauRecord
+      ? "Bravo " + nomJoueur + ", nouveau record !"
+      : "Meilleur temps : " + formatTemps(ancien);
+  }
+  afficherMessage("Course terminée — " + course.position + (course.position === 1 ? "er" : "e") + " place !");
+  afficherEcran("fin");
+  if (boutonRejouer) boutonRejouer.focus();
 }
 
 /* ---------- Accueil : saisie et validation du nom ---------- */
@@ -1145,19 +1237,391 @@ function remplirEcranFin(ancienRecord) {
    Esquive utilise exactement la boucle et le score historiques.
    Pour un nouveau mode : compléter ces quatre fonctions (et MODES). */
 function preparerMode(mode) {
-  // Aucun réglage supplémentaire pour Esquive.
+  if (mode === "course") preparerCourse();
+  else {
+    rivaux = [];
+    course = null;
+  }
 }
 
 function mettreAJourMode(dt) {
-  // Aucune mise à jour spécifique pour Esquive.
+  if (modeActuel === "course") mettreAJourCourse(dt);
 }
 
 function verifierFinMode() {
+  // Esquive se termine par la collision ; Course par la ligne d'arrivée.
+  if (modeActuel === "course" && course && course.distance >= COURSE_DISTANCE_M) {
+    etablirClassement();
+    return { type: "position", valeur: course.position, message: course.position + "e place" };
+  }
   return null;
 }
 
 function dessinerInterfaceMode() {
-  // Aucun élément d'interface supplémentaire pour Esquive.
+  if (modeActuel === "course") dessinerInterfaceCourse();
+}
+
+/* ---------- Course : grille de départ, rivaux et classement ---------- */
+function preparerCourse() {
+  course = {
+    distance: 0,       // distance du joueur en mètres
+    temps: 0,          // temps de course (s)
+    penalty: 0,        // pénalités (s)
+    position: 4,
+    dernierePosition: 4,
+    clignote: 0,
+    classement: []
+  };
+  joueur.vitesse = 0;  // départ arrêté
+  joueur.accelerateur = 0;
+  nitro.jauge = 1;
+
+  const grille = [
+    { cle: "rapide",   voie: 0, avance: 10, image: imagesAdverses[0] },
+    { cle: "regulier", voie: 2, avance: 8,  image: imagesAdverses[1] },
+    { cle: "prudent",  voie: 1, avance: 6,  image: imagesAdverses[2] }
+  ];
+  rivaux = grille.map(function (place, i) {
+    const p = PILOTES[place.cle];
+    return {
+      id: i,
+      nom: p.nom,
+      personnalite: place.cle,
+      image: place.image,
+      couleur: p.couleur,
+      voie: place.voie,
+      x: centreVoie(place.voie),
+      y: JOUEUR_Y - place.avance * PX_PAR_METRE,
+      vx: 0, ax: 0, angle: 0, rotation: 0, glisse: 0, accelerateur: 0,
+      vitesse: 0,
+      distance: place.avance,
+      nitro: { jauge: 1, actif: false, restant: 0 },
+      decision: null,
+      prochaineDecision: 0,
+      derniereCollision: 0,
+      accidents: 0,
+      termine: false
+    };
+  });
+}
+
+/* Mise à jour de la course : rivaux, contacts, aspiration, classement. */
+function mettreAJourCourse(dt) {
+  if (!course) return;
+  course.clignote = Math.max(0, course.clignote - dt);
+  mettreAJourRivaux(dt);
+  verifierCollisionsCourse();
+  mettreAJourAspiration(dt);
+  etablirClassement();
+}
+
+function tempsReactionRival(p) {
+  return difficulte().reflexeRivaux * p.reflexes;
+}
+
+/* Distance de sécurité : v·t_réaction + v²/(2μg), convertie en pixels. */
+function distanceSecurite(p) {
+  const v = Math.max(p.vitesse / PX_PAR_METRE, 1);
+  const mu = Math.max(adherence(), 0.05);
+  // La formule physique est plafonnée au champ de vision réel (un écran) :
+  // sinon un pilote freinerait en voyant une voiture encore hors de l'écran.
+  return Math.min(
+    (v * tempsReactionRival(p) + (v * v) / (2 * mu * G)) * PX_PAR_METRE,
+    HAUTEUR * 1.1
+  );
+}
+
+// Une voie est libre si aucun obstacle ni rival n'occupe la zone devant le pilote.
+function voieLibre(voie, pilot, distance) {
+  if (voie < 0 || voie >= NB_VOIES) return false;
+  for (const o of obstacles) {
+    if (o.voie !== voie) continue;
+    if (o.y + VOITURE_HAUTEUR > pilot.y - distance && o.y < pilot.y + VOITURE_HAUTEUR * 1.2) return false;
+  }
+  for (const r of rivaux) {
+    if (r === pilot) continue;
+    if (r.voie === voie && Math.abs(r.y - pilot.y) < VOITURE_HAUTEUR * 1.7) return false;
+  }
+  return true;
+}
+
+/* Décision d'un rival : regarder devant, choisir une voie libre, ou freiner. */
+function decisionRival(r) {
+  const p = PILOTES[r.personnalite];
+  const zone = distanceSecurite(r);
+  if (voieLibre(r.voie, r, zone)) {
+    if (p.nitro && r.nitro.jauge >= 1 && zone > 260 && Math.random() < 0.03) {
+      r.nitro.actif = true;
+      r.nitro.restant = NITRO_DUREE;
+      r.nitro.jauge = 0;
+    }
+    return null;
+  }
+  const candidats = [r.voie - 1, r.voie + 1].filter((v) => voieLibre(v, r, zone * 0.8));
+  if (candidats.length === 0) {
+    // Si l'obstacle est encore loin, on garde sa vitesse au lieu de freiner
+    // à chaque cycle de décision (sinon le rival ne dépasse jamais 110 km/h).
+    if (voieLibre(r.voie, r, 220)) return null;
+    return { voie: r.voie, ralentir: true };
+  }
+  // Erreur volontaire : plus fréquente sur verglas, surtout pour le pilote prudent.
+  const erreur = 0.02 + 0.12 * meteo.intensiteVerglas + (1 - p.risque) * 0.02;
+  if (Math.random() < erreur) return { voie: r.voie, ralentir: true };
+  const choix = Math.random() < p.agressivite ? candidats[candidats.length - 1] : candidats[0];
+  return { voie: choix, ralentir: false };
+}
+
+function mettreAJourRivaux(dt) {
+  const D = difficulte();
+  for (const r of rivaux) {
+    const p = PILOTES[r.personnalite];
+
+    // La décision n'est appliquée qu'après le temps de réaction du pilote.
+    if (course.temps >= r.prochaineDecision) {
+      r.decision = decisionRival(r);
+      r.prochaineDecision = course.temps + 0.25 + Math.random() * 0.1;
+      if (r.decision && r.decision.voie !== r.voie) {
+        r.executeA = course.temps + tempsReactionRival(p);
+      }
+    }
+    if (r.executeA !== undefined && course.temps >= r.executeA) {
+      r.voie = r.decision.voie;
+      r.decision = null;
+      r.executeA = undefined;
+    }
+
+    if (r.nitro.actif) {
+      r.nitro.restant -= dt;
+      if (r.nitro.restant <= 0) {
+        r.nitro.actif = false;
+        r.nitro.jauge = Math.min(r.nitro.jauge, 0.2);
+      }
+    } else {
+      r.nitro.jauge = Math.min(1, r.nitro.jauge + NITRO_RECHARGE * 0.6 * dt);
+    }
+
+    // Élastique léger : désactivé en Difficile pour une course "propre".
+    let facteur = 1;
+    if (difficulteActive !== "difficile") {
+      facteur = limiter(1 - (r.distance - course.distance) / 900, 0.9, 1.1);
+    }
+    const pluie = meteo.intensitePluie > 0.4 ? p.pluieFacteur : 1;
+    let cible = Math.min(D.vitesseMax, D.vitesseDepart + 55) * facteur * pluie;
+    if (r.nitro.actif) cible += NITRO_BONUS_KMH * 0.6;
+    cible *= facteurMeteo("vitesseMax");
+
+    appliquerMoteur(r, dt, {
+      vitesseCibleKmh: cible,
+      puissance: PUISSANCE_MAX * (r.nitro.actif ? NITRO_PUISSANCE * 0.8 : 0.95)
+    });
+    if (r.decision && r.decision.ralentir) {
+      r.vitesse = ralentirParFrottement(r.vitesse, dt * 0.25);
+    }
+    appliquerDirection(r, dt, {
+      puissance: PUISSANCE_MAX * (r.nitro.actif ? NITRO_PUISSANCE : 1)
+    });
+    if (r.glisse > 0.3) laisserTraces(dt, r);
+
+    r.distance += (r.vitesse / PX_PAR_METRE) * dt;
+    r.y = JOUEUR_Y - (r.distance - course.distance) * PX_PAR_METRE;
+    garderSurLaRoute(r);
+  }
+  separerVoitures();
+}
+
+function garderSurLaRoute(v) {
+  const min = ROUTE_GAUCHE + VOITURE_LARGEUR / 2;
+  const max = ROUTE_GAUCHE + ROUTE_LARGEUR - VOITURE_LARGEUR / 2;
+  if (v.x < min || v.x > max) {
+    v.x = limiter(v.x, min, max);
+    v.vx = -v.vx * 0.3;
+  }
+}
+
+// Anti-chevauchement : on écarte doucement deux voitures qui se superposent.
+function separerVoitures() {
+  const toutes = [joueur].concat(rivaux);
+  for (let i = 0; i < toutes.length; i++) {
+    for (let j = i + 1; j < toutes.length; j++) {
+      const a = toutes[i];
+      const b = toutes[j];
+      if (Math.abs(a.y - b.y) >= VOITURE_HAUTEUR * 0.95) continue;
+      if (Math.abs(a.x - b.x) >= VOITURE_LARGEUR * 0.95) continue;
+      const sens = a.x <= b.x ? -1 : 1;
+      a.x += sens * 6;
+      b.x -= sens * 6;
+      a.vitesse *= 0.995;
+      b.vitesse *= 0.995;
+    }
+  }
+}
+
+/* Aspiration : rester dans le sillage d'un rival recharge le nitro. */
+function mettreAJourAspiration(dt) {
+  for (const r of rivaux) {
+    const ecart = r.distance - course.distance;
+    if (ecart > 4 && ecart < 22 && Math.abs(r.x - joueur.x) < VOITURE_LARGEUR * 0.9) {
+      nitro.jauge = Math.min(1, nitro.jauge + 0.12 * dt);
+      r.nitro.jauge = Math.min(1, r.nitro.jauge + 0.06 * dt);
+    }
+  }
+}
+
+/* Contacts en course : rival = choc physique, trafic = vitesse perdue + pénalité. */
+function verifierCollisionsCourse() {
+  const rectJoueur = rectangle(joueur);
+  for (const o of obstacles) {
+    if (o.penalise || !seChevauchent(rectJoueur, rectangle(o))) continue;
+    o.penalise = true;
+    o.accidente = true;
+    course.penalty += COURSE_PENALITE_S;
+    joueur.vitesse *= 0.45;
+    tremblement = Math.max(tremblement, 8);
+    creerEtincelles(joueur.x, joueur.y + VOITURE_HAUTEUR / 2, 20);
+    sonAccident(0.5);
+    ajouterTexteFlottant("+" + COURSE_PENALITE_S + " s", joueur.x, joueur.y - 40, "#ff6b6b", 26);
+    afficherMessage("Choc avec le trafic : +" + COURSE_PENALITE_S + " s");
+  }
+  for (const r of rivaux) {
+    if (course.temps - r.derniereCollision < 0.8) continue;
+    if (seChevauchent(rectJoueur, rectangle(r))) {
+      chocVoitures(joueur, r);
+      r.derniereCollision = course.temps;
+    }
+  }
+  for (let i = 0; i < rivaux.length; i++) {
+    for (let j = i + 1; j < rivaux.length; j++) {
+      const a = rivaux[i];
+      const b = rivaux[j];
+      if (course.temps - a.derniereCollision < 0.8 || course.temps - b.derniereCollision < 0.8) continue;
+      if (seChevauchent(rectangle(a), rectangle(b))) {
+        chocVoitures(a, b);
+        a.derniereCollision = b.derniereCollision = course.temps;
+      }
+    }
+  }
+}
+
+// Choc partiellement élastique entre deux voitures, sans fin de partie.
+function chocVoitures(a, b) {
+  const e = 0.3;
+  const v1 = a.vitesse;
+  const v2 = b.vitesse;
+  a.vitesse = Math.max(0, (v1 + v2 - e * (v1 - v2)) / 2);
+  b.vitesse = Math.max(0, (v1 + v2 + e * (v1 - v2)) / 2);
+  const decalage = (a.x - b.x) / VOITURE_LARGEUR;
+  const sens = decalage === 0 ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(decalage);
+  a.vx += sens * 45;
+  b.vx -= sens * 45;
+  a.rotation = sens * 0.5;
+  b.rotation = -sens * 0.5;
+  tremblement = Math.max(tremblement, 5);
+  creerEtincelles((a.x + b.x) / 2, (a.y + b.y) / 2 + VOITURE_HAUTEUR / 2, 12);
+  sonAccident(0.3);
+  if (a.accidents !== undefined) a.accidents++;
+  if (b.accidents !== undefined) b.accidents++;
+}
+
+function etablirClassement() {
+  if (!course) return;
+  const liste = [{ nom: nomJoueur || "Vous", distance: course.distance, joueur: true }]
+    .concat(rivaux.map(function (r) {
+      return { nom: r.nom, distance: r.distance, joueur: false, reference: r };
+    }));
+  liste.sort(function (a, b) { return b.distance - a.distance; });
+  course.classement = liste;
+  const pos = liste.findIndex(function (e) { return e.joueur; }) + 1;
+  if (pos !== course.position) {
+    if (course.position < pos) sonPositionPerdue();
+    else sonPositionGagnee();
+    course.dernierePosition = course.position;
+    course.position = pos;
+    course.clignote = 1.2;
+  }
+}
+
+function sonPositionGagnee() {
+  jouerBip(880, 0.18, "triangle", 0.12);
+  jouerBip(1175, 0.22, "triangle", 0.1, 0.12);
+}
+function sonPositionPerdue() {
+  jouerBip(520, 0.18, "triangle", 0.1);
+  jouerBip(350, 0.22, "triangle", 0.09, 0.12);
+}
+
+/* Affichage propre au mode Course : position, progression, écarts, mini-carte. */
+function dessinerInterfaceCourse() {
+  if (!course) return;
+  const milieu = LARGEUR / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const clignote = course.clignote > 0 && Math.floor(performance.now() / 120) % 2 === 0;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.beginPath();
+  rectangleArrondi(milieu - 62, 6, 124, 48, 10);
+  ctx.fill();
+  ctx.font = "900 28px Arial";
+  ctx.fillStyle = clignote ? "#ffd23f" : "#ffffff";
+  ctx.fillText(course.position + (course.position === 1 ? "er" : "e"), milieu - 24, 30);
+  ctx.font = "bold 14px Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("/4", milieu + 30, 30);
+
+  const km = Math.min(COURSE_DISTANCE_M, course.distance) / 1000;
+  ctx.font = "bold 11px Arial";
+  ctx.fillStyle = "#9fb3c8";
+  ctx.fillText(km.toFixed(1).replace(".", ",") + " / 3 km", milieu, 68);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.fillRect(milieu - 70, 78, 140, 6);
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillRect(milieu - 70, 78, 140 * limiter(course.distance / COURSE_DISTANCE_M, 0, 1), 6);
+
+  const vJoueur = Math.max(joueur.vitesse / PX_PAR_METRE, 1);
+  const devant = course.classement[course.position - 2];
+  const derriere = course.classement[course.position];
+  let ecart = "";
+  if (devant) ecart = "−" + ((devant.distance - course.distance) / vJoueur).toFixed(1).replace(".", ",") + " s";
+  else if (derriere) ecart = "+" + ((course.distance - derriere.distance) / vJoueur).toFixed(1).replace(".", ",") + " s";
+  ctx.font = "bold 12px Arial";
+  ctx.fillStyle = "#5ee7ff";
+  ctx.fillText(ecart, milieu, 99);
+
+  // Mini-carte verticale : un point par voiture, le joueur en blanc.
+  const mx = LARGEUR - 22;
+  const my0 = 170;
+  const my1 = 380;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.beginPath();
+  rectangleArrondi(mx - 9, my0 - 12, 18, my1 - my0 + 24, 8);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.fillRect(mx - 1, my0, 2, my1 - my0);
+  const hauteurMini = function (d) {
+    return my1 - (my1 - my0) * limiter(d / COURSE_DISTANCE_M, 0, 1);
+  };
+  for (const r of rivaux) {
+    ctx.fillStyle = r.couleur;
+    ctx.beginPath();
+    ctx.arc(mx, hauteurMini(r.distance), 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(mx, hauteurMini(course.distance), 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rivaux hors écran : une flèche indique s'ils sont devant ou derrière.
+  ctx.font = "bold 16px Arial";
+  for (const r of rivaux) {
+    if (r.y < 0) {
+      ctx.fillStyle = r.couleur;
+      ctx.fillText("▲", r.x, 148);
+    } else if (r.y > HAUTEUR - VOITURE_HAUTEUR) {
+      ctx.fillStyle = r.couleur;
+      ctx.fillText("▼", r.x, HAUTEUR - 148);
+    }
+  }
 }
 
 /* ---------- 6. Commandes ---------- */
@@ -1373,11 +1837,18 @@ ajusterTailleCanvas();
 
 /* ---------- 7. Physique ---------- */
 function mettreAJour(dt) {
-  if (etat === "compte" || etat === "jeu") {
+  // Sur la grille de départ, personne ne bouge avant le feu vert
+  const surGrille = modeActuel === "course" && etat === "compte";
+  if ((etat === "compte" || etat === "jeu") && !surGrille) {
     mettreAJourMoteur(dt);
     mettreAJourDirection(dt);
   } else if (etat === "accident") {
     mettreAJourAccident(dt);
+  }
+
+  if (etat === "jeu" && modeActuel === "course" && course) {
+    course.temps += dt;
+    course.distance = defilement / PX_PAR_METRE;
   }
 
   defilement += joueur.vitesse * dt;
@@ -1408,14 +1879,12 @@ function mettreAJour(dt) {
 
 /* Moteur : principe fondamental de la dynamique  m·a = F_moteur − F_traînée − F_roulement
    La force du moteur est limitée par la puissance (F = P / v) et par l'adhérence des pneus. */
-function mettreAJourMoteur(dt) {
-  const v = joueur.vitesse / PX_PAR_METRE;                       // m/s
-  const D = difficulte();
-  let vitesseCibleKmh = Math.min(D.vitesseMax, D.vitesseDepart + voituresEvitees * 2.5);
-  if (nitro.actif) vitesseCibleKmh += NITRO_BONUS_KMH;
-  vitesseCibleKmh *= facteurMeteo("vitesseMax");
-  const vCible = vitesseCibleKmh / 3.6;
-  const puissance = PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1);
+/* Moteur générique : m·a = F_moteur − F_traînée − F_roulement.
+   Le joueur ET les rivaux passent par cette même fonction : la course est juste. */
+function appliquerMoteur(voiture, dt, reglage) {
+  const v = voiture.vitesse / PX_PAR_METRE;                       // m/s
+  const vCible = reglage.vitesseCibleKmh / 3.6;
+  const puissance = reglage.puissance;
 
   const forceTrainee = COEF_TRAINEE * v * v;
 
@@ -1423,43 +1892,59 @@ function mettreAJourMoteur(dt) {
   // résistances, plus un supplément si l'on est en dessous de la vitesse visée.
   const puissanceMaintien = (forceTrainee + FORCE_ROULEMENT) * v / puissance;
   const accelerateur = limiter(puissanceMaintien + (vCible - v) * 0.5, 0, 1);
-  joueur.accelerateur = accelerateur;
+  voiture.accelerateur = accelerateur;
 
   let forceMoteur = accelerateur * Math.min(forceAdherence(), puissance / Math.max(v, 1));
   if (v > vCible + 1) forceMoteur = -Math.min(FORCE_FREIN_MAX, (v - vCible) * 2000);
 
   const acceleration = (forceMoteur - forceTrainee - FORCE_ROULEMENT) / MASSE;
-  const nouvelleVitesse = Math.max(0, v + acceleration * dt);
+  voiture.vitesse = Math.max(0, v + acceleration * dt) * PX_PAR_METRE;
+}
 
-  joueur.vitesse = nouvelleVitesse * PX_PAR_METRE;
+function mettreAJourMoteur(dt) {
+  const D = difficulte();
+  let vitesseCibleKmh = Math.min(D.vitesseMax, D.vitesseDepart + voituresEvitees * 2.5);
+  if (nitro.actif) vitesseCibleKmh += NITRO_BONUS_KMH;
+  vitesseCibleKmh *= facteurMeteo("vitesseMax");
+  appliquerMoteur(joueur, dt, {
+    vitesseCibleKmh: vitesseCibleKmh,
+    puissance: PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1)
+  });
 }
 
 /* Direction : la voiture est attirée vers le centre de sa voie comme par un ressort amorti.
    L'accélération latérale est limitée (adhérence), et l'angle de la voiture suit la
    direction réelle de sa vitesse : angle = atan(vitesse latérale / vitesse d'avancement). */
-function mettreAJourDirection(dt) {
-  const cible = centreVoie(joueur.voie);
-  let ax = RAIDEUR * (cible - joueur.x) - AMORTISSEMENT * joueur.vx;
+/* Direction générique : ressort amorti vers le centre de la voie, accélération
+   latérale limitée par μ, angle = atan(vx / v). Même code pour tous les pilotes. */
+function appliquerDirection(voiture, dt, reglage) {
+  const cible = centreVoie(voiture.voie);
+  let ax = RAIDEUR * (cible - voiture.x) - AMORTISSEMENT * voiture.vx;
   // Sur le verglas, de petites irrégularités de la glace font dériver la voiture
   ax += deriveVerglas();
   // Les pneus ne peuvent pas fournir plus que μ·g : sur route glissante la voiture
   // met plus de temps à changer de voie et dépasse sa cible (survirage)
   const accelMax = ACCEL_LATERALE_MAX * adherence() / ADHERENCE;
   ax = limiter(ax, -accelMax, accelMax);
-  joueur.ax = ax;
-  joueur.vx += ax * dt;
-  joueur.x += joueur.vx * dt;
-  joueur.angle = limiter(Math.atan2(joueur.vx, Math.max(joueur.vitesse, 1)), -0.5, 0.5);
+  voiture.ax = ax;
+  voiture.vx += ax * dt;
+  voiture.x += voiture.vx * dt;
+  voiture.angle = limiter(Math.atan2(voiture.vx, Math.max(voiture.vitesse, 1)), -0.5, 0.5);
 
   // Glissement latéral : un virage serré dépasse l'adhérence des pneus
   const k = adherence() / ADHERENCE;
   const glisseLaterale = limiter((Math.abs(ax) - 800 * k) / (1500 * k), 0, 1);
   // Patinage : la force demandée au moteur approche la limite d'adhérence μ·m·g
-  const v = Math.max(joueur.vitesse / PX_PAR_METRE, 1);
-  const puissance = PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1);
-  const forceDemandee = joueur.accelerateur * puissance / v;
+  const v = Math.max(voiture.vitesse / PX_PAR_METRE, 1);
+  const forceDemandee = voiture.accelerateur * reglage.puissance / v;
   const patinage = limiter((forceDemandee / forceAdherence() - 0.8) / 0.25, 0, 1);
-  lisserGlisse(Math.max(glisseLaterale, patinage), dt);
+  voiture.glisse += (Math.max(glisseLaterale, patinage) - voiture.glisse) * Math.min(1, dt * 25);
+}
+
+function mettreAJourDirection(dt) {
+  appliquerDirection(joueur, dt, {
+    puissance: PUISSANCE_MAX * (nitro.actif ? NITRO_PUISSANCE : 1)
+  });
   laisserTraces(dt);
 }
 
@@ -1469,19 +1954,19 @@ function lisserGlisse(cible, dt) {
 
 /* Traces de pneus : on mémorise la position des roues arrière quand la voiture glisse.
    Les traces sont « collées » à la route : elles descendent avec le défilement. */
-function laisserTraces(dt) {
-  if (joueur.glisse < 0.3 || facteurMeteo("traces") < 0.1) return;
-  const cosA = Math.cos(joueur.angle);
-  const sinA = Math.sin(joueur.angle);
-  const centreY = joueur.y + VOITURE_HAUTEUR / 2;
+function laisserTraces(dt, voiture = joueur) {
+  if (voiture.glisse < 0.3 || facteurMeteo("traces") < 0.1) return;
+  const cosA = Math.cos(voiture.angle);
+  const sinA = Math.sin(voiture.angle);
+  const centreY = voiture.y + VOITURE_HAUTEUR / 2;
   for (const cote of [-1, 1]) {
     const lx = cote * (VOITURE_LARGEUR / 2 - 8);
     const ly = VOITURE_HAUTEUR / 2 - 16;
     traces.push({
-      x: joueur.x + lx * cosA - ly * sinA,
+      x: voiture.x + lx * cosA - ly * sinA,
       y: centreY + lx * sinA + ly * cosA,
       defilementDepart: defilement,
-      opacite: (0.2 + 0.45 * joueur.glisse) * facteurMeteo("traces")
+      opacite: (0.2 + 0.45 * voiture.glisse) * facteurMeteo("traces")
     });
   }
   if (traces.length > 1500) traces.splice(0, traces.length - 1500);
@@ -1501,7 +1986,26 @@ function dessinerTraces() {
   });
 }
 
+/* Course : 5 feux rouges s'éteignent un par un avant le départ. */
+function mettreAJourFeux(dt) {
+  const avant = Math.ceil(compteARebours);
+  compteARebours -= dt;
+  const apres = Math.ceil(compteARebours);
+  if (apres !== avant) {
+    if (apres > 0) jouerBip(440, 0.2, "square", 0.1);
+    else {
+      jouerBip(1046, 0.5, "square", 0.14);
+      etat = "jeu";
+      afficherMessage("Feu vert ! Direction l'arrivée.");
+    }
+  }
+}
+
 function mettreAJourCompteARebours(dt) {
+  if (modeActuel === "course") {
+    mettreAJourFeux(dt);
+    return;
+  }
   const avant = Math.ceil(compteARebours);
   compteARebours -= dt;
   const apres = Math.ceil(compteARebours);
@@ -1533,7 +2037,8 @@ function creerVaguesDeTrafic(dt) {
   // Sur route glissante, on laisse plus de temps pour changer de voie.
   // La densité de la difficulté resserre (ou desserre) les vagues.
   const tempsReaction = 0.85 + 0.7 * (1 - adherence() / ADHERENCE);
-  const ecart = (VOITURE_HAUTEUR + Math.max(160, vRel * tempsReaction)) / difficulte().densiteTrafic;
+  const densite = difficulte().densiteTrafic * (modeActuel === "course" ? COURSE_DENSITE_TRAFIC : 1);
+  const ecart = (VOITURE_HAUTEUR + Math.max(160, vRel * tempsReaction)) / densite;
   if (distanceDepuisVague >= ecart) {
     distanceDepuisVague = 0;
     creerVague();
@@ -1602,6 +2107,14 @@ function deplacerObstacles(dt) {
 // Un obstacle est évité quand il est entièrement passé sous la voiture du joueur
 function verifierObstaclesEvites() {
   for (const o of obstacles) {
+    if (modeActuel === "course") {
+      // Pas de score en course, mais les frôlements rechargent toujours le nitro.
+      if (!o.compte && !o.accidente && o.y > joueur.y + VOITURE_HAUTEUR) {
+        o.compte = true;
+        if (o.ecartMin < SEUIL_FROLEMENT) declencherFrolement(o);
+      }
+      continue;
+    }
     if (!o.compte && !o.accidente && o.y > joueur.y + VOITURE_HAUTEUR) {
       o.compte = true; // un seul passage compté par obstacle
       voituresEvitees++;
@@ -1638,7 +2151,12 @@ function seChevauchent(a, b) {
 
 function verifierCollisions() {
   const mode = MODES[modeActuel];
-  if (!mode || !mode.collisionFatale) return;
+  if (!mode) return;
+  if (mode.rivaux) {
+    verifierCollisionsCourse();
+    return;
+  }
+  if (!mode.collisionFatale) return;
   const rectJoueur = rectangle(joueur);
   for (const o of obstacles) {
     if (seChevauchent(rectJoueur, rectangle(o))) {
@@ -2096,6 +2614,13 @@ function dessinerScene() {
   for (const o of obstacles) {
     dessinerVoiture(o.image, o.x, o.y, o.angle);
   }
+  if (modeActuel === "course") {
+    for (const r of rivaux) {
+      if (r.y > -VOITURE_HAUTEUR && r.y < HAUTEUR) {
+        dessinerVoiture(r.image, r.x, r.y, r.angle);
+      }
+    }
+  }
   dessinerVoiture(imageJoueur, joueur.x, joueur.y, joueur.angle);
   dessinerParticules(false);
   dessinerAmbiance();
@@ -2500,6 +3025,24 @@ function dessinerTexteSurCanvas() {
 
   // Le « Prêt ? » et l'écran de fin sont désormais des écrans HTML.
   if (etat === "compte") {
+    if (modeActuel === "course") {
+      const y = HAUTEUR * 0.35;
+      const allumees = Math.max(0, Math.ceil(compteARebours));
+      for (let i = 0; i < COURSE_DEMARRAGE_FEUX; i++) {
+        const x = LARGEUR / 2 + (i - 2) * 34;
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = i < allumees ? "#ff3b3b" : "#252525";
+        ctx.fill();
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.font = "bold 18px Arial";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("GRILLE DE DÉPART", LARGEUR / 2, y - 40);
+      return;
+    }
     const nombre = Math.ceil(compteARebours);
     const progression = compteARebours - Math.floor(compteARebours);
     ctx.font = "bold " + Math.round(60 + 40 * progression) + "px Arial";
@@ -2541,6 +3084,7 @@ function boucle(temps) {
 
   if (etat === "compte" || etat === "jeu") {
     mettreAJourSonContinu(joueur.vitesse / PX_PAR_METRE, joueur.accelerateur, joueur.ax, true);
+    mettreAJourSonRivaux();
   }
   if (etat === "compte" || etat === "jeu" || etat === "accident") {
     mettreAJourSonPneus(joueur.glisse, Math.hypot(joueur.vitesse, joueur.vx) / PX_PAR_METRE);
@@ -2574,9 +3118,9 @@ function lancerPartie() {
   reinitialiserPartie();
   masquerEcrans();
   etat = "compte";
-  compteARebours = 3;
+  compteARebours = modeActuel === "course" ? COURSE_DEMARRAGE_FEUX : 3;
   jouerBip(523, 0.25, "square", 0.12);
-  afficherMessage("Préparez-vous…");
+  afficherMessage(modeActuel === "course" ? "Grille de départ…" : "Préparez-vous…");
   boutonRecommencer.textContent = "Recommencer";
 
   reservoirTemps = 0;
@@ -2590,6 +3134,11 @@ function terminerPartie() {
   etat = "fini";
   couperSonsContinus();
   score = Math.round(score);
+
+  if (modeActuel === "course") {
+    terminerCourse();
+    return;
+  }
 
   // Record mis à jour AVANT l'affichage de l'écran de fin
   const ancienRecord = lireRecord(modeActuel, nomJoueur);

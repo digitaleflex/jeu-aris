@@ -304,6 +304,9 @@ const sonde = `
   get score(){ return typeof score === 'undefined' ? null : score; },
   set score(v){ score = v; },
   get joueur(){ return typeof joueur === 'undefined' ? null : joueur; },
+  get course(){ return typeof course === 'undefined' ? null : course; },
+  get rivaux(){ return typeof rivaux === 'undefined' ? null : rivaux; },
+  get compteARebours(){ return typeof compteARebours === 'undefined' ? null : compteARebours; },
   get difficulteActive(){ return typeof difficulteActive === 'undefined' ? null : difficulteActive; },
   get idAnimation(){ return typeof idAnimation === 'undefined' ? null : idAnimation; },
   MODES: typeof MODES === 'undefined' ? null : MODES,
@@ -311,6 +314,20 @@ const sonde = `
   lireRecord: typeof lireRecord === 'undefined' ? null : lireRecord,
   migrerAncienRecord: typeof migrerAncienRecord === 'undefined' ? null : migrerAncienRecord,
   terminerPartie: typeof terminerPartie === 'undefined' ? null : terminerPartie,
+  demarrerMode: typeof demarrerMode === 'undefined' ? null : demarrerMode,
+  mettreAJour: typeof mettreAJour === 'undefined' ? null : mettreAJour,
+  verifierFinMode: typeof verifierFinMode === 'undefined' ? null : verifierFinMode,
+  simulerRivaux: (secondes) => {
+    const dt = 1 / 120;
+    for (let i = 0; i < secondes * 120; i++) {
+      course.temps += dt;
+      creerVaguesDeTrafic(dt);
+      deplacerObstacles(dt);
+      mettreAJourRivaux(dt);
+      course.distance += joueur.vitesse / PX_PAR_METRE * dt;
+    }
+    return rivaux.map((r) => r.accidents);
+  },
 };`;
 vm.runInContext(code + sonde, sandbox, { filename: 'script.js' });
 const t = sandbox.__t;
@@ -367,11 +384,12 @@ verifier('confirmer le nom ouvre le choix du mode', () => {
   assert.equal($('ecranAccueil').hidden, true);
   assert.equal($('ecranChoixMode').hidden, false);
 });
-verifier('5 cartes générées, une seule disponible', () => {
+verifier('5 cartes générées, Esquive et Course disponibles', () => {
   const cartes = $('cartesModes').children;
   assert.equal(cartes.length, 5);
-  assert.equal(cartes.filter((c) => !c.disabled).length, 1);
+  assert.equal(cartes.filter((c) => !c.disabled).length, 2);
   assert.equal(cartes[0].dataset.mode, 'esquive');
+  assert.equal(cartes[1].dataset.mode, 'course');
 });
 verifier('clic sur la carte : règles du mode', () => {
   $('cartesModes').children[0].dispatch('click');
@@ -419,6 +437,35 @@ verifier('migration de l’ancien record global', () => {
   t.migrerAncienRecord('Tom');
   assert.equal(t.lireRecord('esquive', 'Tom'), 77);
   assert.equal(stockage.has('recordVoiture'), false);
+});
+
+verifier('Course : grille de départ et 5 feux', () => {
+  t.demarrerMode('course');
+  assert.equal(t.etat, 'compte');
+  assert.equal(t.compteARebours, 5);
+  assert.equal(t.joueur.vitesse, 0);
+  assert.equal(t.rivaux.length, 3);
+  for (let i = 0; i < 5 * 120 + 10; i++) t.mettreAJour(1 / 120);
+  assert.equal(t.etat, 'jeu');
+});
+verifier('IA : 3 rivaux roulent 60 s sans accident', () => {
+  t.joueur.vitesse = 500;
+  const accidents = t.simulerRivaux(60);
+  assert.equal(accidents.join(','), '0,0,0', 'accidents par rival : ' + accidents.join(','));
+  for (const r of t.rivaux) {
+    assert.ok(r.distance > 1500, 'distance du rival ' + r.nom + ' = ' + Math.round(r.distance) + ' m, vitesse ' + Math.round(r.vitesse / 20 * 3.6) + ' km/h');
+  }
+});
+verifier('Course : arrivée, classement et meilleur temps', () => {
+  t.course.distance = 3100;
+  const fin = t.verifierFinMode();
+  assert.ok(fin, 'verifierFinMode ne renvoie rien');
+  assert.equal(fin.valeur, t.course.position);
+  t.terminerPartie();
+  assert.equal(t.etat, 'fini');
+  assert.equal($('ecranFin').hidden, false);
+  assert.match($('finResultat').textContent, /4/);
+  assert.ok(t.lireRecord('course', 'Léa') > 0);
 });
 
 console.log(`${reussites} vérification(s) réussie(s)`);

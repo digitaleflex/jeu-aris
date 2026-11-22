@@ -34,8 +34,8 @@ COMMANDES
 
 ÉCRANS
   - Accueil : saisie du nom + noms récents.
-  - Choix du mode : cartes générées depuis MODES (Esquive disponible,
-    Course / Chrono / Zen / Défi marqués « Bientôt »), record affiché
+  - Choix du mode : cartes générées depuis MODES (Esquive et Course
+    disponibles, Chrono / Zen / Défi marqués « Bientôt »), record affiché
     pour chaque mode et le joueur courant, dernier mode joué mis en avant.
   - Règles : 3 lignes de règles avant de lancer le mode.
   - Fin de partie : score, combo max, frôlements, distance parcourue,
@@ -52,7 +52,7 @@ DIFFICULTÉ
     vitesse maximale      140     180       220   km/h
     densité du trafic     0,7     1,0       1,3
     probabilité verglas   15 %    30 %      50 %
-    réflexe rivaux        0,6 s   0,4 s     0,2 s   (modes futurs)
+    réflexe rivaux        0,6 s   0,4 s     0,2 s   (course : temps de réaction des rivaux ; l'élastique est coupé en Difficile)
     temps checkpoint      20 s    15 s      10 s    (modes futurs)
     multiplicateur score  0,8     1,0       1,3
   La densité agit sur l'écart entre les vagues de voitures, la probabilité
@@ -91,6 +91,34 @@ RÈGLES
     (voir DIFFICULTÉ). Le nitro ajoute +70 km/h.
   - Une collision termine la partie. Le meilleur score du joueur pour ce
     mode est conservé (record par joueur et par mode).
+
+MODE COURSE
+  - Grille de départ : 5 feux rouges, puis feu vert, départ arrêté.
+  - 3 km à parcourir contre 3 rivaux (Rapide, Prudent, Régulier).
+    Le trafic civil reste présent mais 40 % moins dense ; un choc avec lui
+    coûte beaucoup de vitesse et +2 s de pénalité, sans fin de partie.
+  - Les 4 voitures utilisent exactement les mêmes fonctions de physique
+    (appliquerMoteur / appliquerDirection) : moteur, traînée, adhérence et
+    météo identiques pour tous.
+  - Contact entre voitures : choc élastique qui dévie et ralentit, jamais
+    d'élimination. Les voitures sont écartées si elles se superposent.
+  - Rester dans le sillage d'un rival (4 à 22 m) recharge le nitro.
+  - IA : chaque pilote regarde devant lui, compare avec la distance de
+    sécurité v·t_réaction + v²/(2μg) (plafonnée au champ de vision), choisit
+    une voie libre après son temps de réaction, commet parfois une erreur
+    (plus souvent sur verglas), et utilise le nitro en ligne droite si son
+    profil est agressif. Élastique léger sauf en Difficile.
+  - Affichage Canvas : position (1er/4…), barre des 3 km, écart en secondes,
+    mini-carte verticale et flèches pour les rivaux hors écran. Chaque rival
+    a son propre son de moteur, plus fort quand il est proche ; un bip montant
+    ou descendant annonce un changement de position.
+  - Fin : classement, temps total, pénalités et meilleur temps du joueur
+    (record.course.<nom>, affiché en mm:ss,centièmes).
+
+TESTS
+  node tests/verification.mjs  → 17 vérifications headless (parcours complet,
+  records, difficulté, boucle unique, grille de course et 60 s de rivaux
+  sans accident).
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
   - Moteur : m·a = F_moteur − F_traînée − F_roulement,
