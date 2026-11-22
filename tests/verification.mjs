@@ -303,8 +303,12 @@ const sonde = `
   get modeActuel(){ return typeof modeActuel === 'undefined' ? null : modeActuel; },
   get score(){ return typeof score === 'undefined' ? null : score; },
   set score(v){ score = v; },
+  set defilement(v){ defilement = v; },
   get joueur(){ return typeof joueur === 'undefined' ? null : joueur; },
   get course(){ return typeof course === 'undefined' ? null : course; },
+  get chrono(){ return typeof chrono === 'undefined' ? null : chrono; },
+  get zen(){ return typeof zen === 'undefined' ? null : zen; },
+  get meteo(){ return typeof meteo === 'undefined' ? null : meteo; },
   get rivaux(){ return typeof rivaux === 'undefined' ? null : rivaux; },
   get compteARebours(){ return typeof compteARebours === 'undefined' ? null : compteARebours; },
   get difficulteActive(){ return typeof difficulteActive === 'undefined' ? null : difficulteActive; },
@@ -315,6 +319,11 @@ const sonde = `
   migrerAncienRecord: typeof migrerAncienRecord === 'undefined' ? null : migrerAncienRecord,
   terminerPartie: typeof terminerPartie === 'undefined' ? null : terminerPartie,
   demarrerMode: typeof demarrerMode === 'undefined' ? null : demarrerMode,
+  actionZen: typeof actionZen === 'undefined' ? null : actionZen,
+  aleatoire: typeof aleatoire === 'undefined' ? null : aleatoire,
+  mulberry32: typeof mulberry32 === 'undefined' ? null : mulberry32,
+  graineDuJour: typeof graineDuJour === 'undefined' ? null : graineDuJour,
+  initialiserGenerateur: typeof initialiserGenerateur === 'undefined' ? null : initialiserGenerateur,
   mettreAJour: typeof mettreAJour === 'undefined' ? null : mettreAJour,
   verifierFinMode: typeof verifierFinMode === 'undefined' ? null : verifierFinMode,
   simulerRivaux: (secondes) => {
@@ -384,10 +393,10 @@ verifier('confirmer le nom ouvre le choix du mode', () => {
   assert.equal($('ecranAccueil').hidden, true);
   assert.equal($('ecranChoixMode').hidden, false);
 });
-verifier('5 cartes générées, Esquive et Course disponibles', () => {
+verifier('5 cartes générées, tous les modes disponibles', () => {
   const cartes = $('cartesModes').children;
   assert.equal(cartes.length, 5);
-  assert.equal(cartes.filter((c) => !c.disabled).length, 2);
+  assert.equal(cartes.filter((c) => !c.disabled).length, 5);
   assert.equal(cartes[0].dataset.mode, 'esquive');
   assert.equal(cartes[1].dataset.mode, 'course');
 });
@@ -466,6 +475,47 @@ verifier('Course : arrivée, classement et meilleur temps', () => {
   assert.equal($('ecranFin').hidden, false);
   assert.match($('finResultat').textContent, /4/);
   assert.ok(t.lireRecord('course', 'Léa') > 0);
+});
+
+verifier('Chrono : 30 s, checkpoint +temps et fin au temps écoulé', () => {
+  t.demarrerMode('chrono');
+  for (let i = 0; i < 3 * 120 + 10; i++) t.mettreAJour(1 / 120);
+  assert.equal(t.etat, 'jeu');
+  assert.ok(t.chrono.restant > 29 && t.chrono.restant <= 30);
+  t.chrono.prochainCheckpoint = 100;
+  t.defilement = 101 * 20;
+  const avant = t.chrono.restant;
+  t.mettreAJour(1 / 120);
+  assert.ok(t.chrono.restant > avant + 10, 'le checkpoint doit ajouter du temps');
+  t.chrono.restant = 0.001;
+  t.mettreAJour(1 / 120);
+  assert.equal(t.etat, 'fini');
+  assert.match($('finResultat').textContent, /parcourus/);
+});
+verifier('Zen : limite 110 km/h, météo/heure choisies, aucun record', () => {
+  t.demarrerMode('zen');
+  for (let i = 0; i < 3 * 120 + 10; i++) t.mettreAJour(1 / 120);
+  t.joueur.vitesse = 900;
+  t.mettreAJour(1 / 120);
+  assert.ok(t.joueur.vitesse <= (110 / 3.6) * 20 + 1, 'vitesse Zen > 110 km/h');
+  t.actionZen('pluie');
+  assert.equal(t.meteo.actuelle, 'pluie');
+  t.actionZen('nuit');
+  assert.equal(t.zen.heure, 'nuit');
+  assert.equal(t.verifierFinMode(), null, 'Zen ne doit jamais se terminer');
+  t.actionZen('quitter');
+  assert.equal(t.etat, 'choixMode');
+});
+verifier('Défi du jour : graine stable = même route', () => {
+  const a = t.mulberry32(20261122);
+  const b = t.mulberry32(20261122);
+  const suiteA = Array.from({ length: 24 }, () => a());
+  const suiteB = Array.from({ length: 24 }, () => b());
+  assert.equal(suiteA.join(','), suiteB.join(','));
+  t.initialiserGenerateur('defi');
+  const tire = Array.from({ length: 24 }, () => t.aleatoire());
+  const reference = t.mulberry32(t.graineDuJour());
+  assert.equal(tire.join(','), Array.from({ length: 24 }, () => reference()).join(','));
 });
 
 console.log(`${reussites} vérification(s) réussie(s)`);

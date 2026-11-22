@@ -56,6 +56,7 @@ const finMessage = document.getElementById("finMessage");
 const boutonRejouer = document.getElementById("boutonRejouer");
 const boutonChangerMode = document.getElementById("boutonChangerMode");
 const boutonChangerJoueurFin = document.getElementById("boutonChangerJoueurFin");
+const boutonCopierDefi = document.getElementById("boutonCopierDefi");
 const radiosDifficulte = document.querySelectorAll('input[name="difficulte"]');
 
 
@@ -149,27 +150,27 @@ const MODES = {
     icone: "⏱️",
     but: "Bats le chrono",
     regles: [
-      "Parcours la distance le plus vite possible.",
-      "Chaque seconde compte, sans sortir de la route.",
-      "Bientôt disponible dans une prochaine version."
+      "Tu as 30 s : chaque checkpoint ajoute du temps.",
+      "Un frôlement rapporte 1 s, un choc te fait perdre de la vitesse.",
+      "À zéro, c'est la distance parcourue qui compte."
     ],
     trafic: true,
     rivaux: false,
-    collisionFatale: true,
-    distanceCible: 2000,
-    tempsLimite: 90,
-    score: "temps",
+    collisionFatale: false,
+    distanceCible: null,
+    tempsLimite: 30,
+    score: "distance",
     meteo: true,
-    disponible: false
+    disponible: true
   },
   zen: {
     nom: "Zen",
     icone: "🌿",
     but: "Roule sans pression",
     regles: [
-      "Aucune collision fatale : roule à ton rythme.",
-      "Parcours la plus grande distance possible.",
-      "Bientôt disponible dans une prochaine version."
+      "Aucune fin de partie : un choc te ralentit juste.",
+      "Choisis la météo, l'heure et affiche le panneau pédagogique.",
+      "Bouton Sortir pour revenir au choix du mode."
     ],
     trafic: true,
     rivaux: false,
@@ -178,16 +179,16 @@ const MODES = {
     tempsLimite: null,
     score: "distance",
     meteo: true,
-    disponible: false
+    disponible: true
   },
   defi: {
-    nom: "Défi",
-    icone: "🎯",
-    but: "Un objectif surprise",
+    nom: "Défi du jour",
+    icone: "📅",
+    but: "Même route pour tous",
     regles: [
-      "Un défi différent à chaque partie.",
-      "Remplis l'objectif avant la fin du temps.",
-      "Bientôt disponible dans une prochaine version."
+      "Une seule route pour tout le monde aujourd'hui.",
+      "Mêmes voitures et même météo grâce à la graine du jour.",
+      "Une seule tentative officielle comptée par jour."
     ],
     trafic: true,
     rivaux: false,
@@ -196,7 +197,7 @@ const MODES = {
     tempsLimite: 60,
     score: "points",
     meteo: true,
-    disponible: false
+    disponible: true
   }
 };
 
@@ -206,6 +207,13 @@ const COURSE_DISTANCE_M = 3000;        // 3 km
 const COURSE_DENSITE_TRAFIC = 0.6;     // trafic civil moins dense qu'en Esquive
 const COURSE_PENALITE_S = 2;           // pénalité après un choc avec le trafic
 const COURSE_DEMARRAGE_FEUX = 5;       // feux rouges de la grille
+
+/* ---------- Chrono, Zen, Défi du jour ---------- */
+const CHRONO_DEPART_S = 30;             // chrono initial
+const CHRONO_CHECKPOINT_M = 800;        // premier espacement entre portiques
+const CHRONO_CROISSANCE = 1.12;         // les checkpoints s'éloignent ensuite
+const ZEN_VITESSE_MAX_KMH = 110;        // limite libre du mode Zen
+const CHRONO_FROLEMENT_S = 1;           // bonus de temps au frôlement en Chrono
 
 const PILOTES = {
   rapide:   { nom: "Rapide",   agressivite: 0.9, reflexes: 1.15, risque: 0.9,  nitro: true,  pluieFacteur: 1,    couleur: "#ff5b5b" },
@@ -261,6 +269,31 @@ function pxVersKmh(px) {
 }
 function limiter(valeur, min, max) {
   return Math.max(min, Math.min(max, valeur));
+}
+
+/* aléatoire() remplace Math.random() dans tout ce qui construit la route.
+   En Défi du jour, la graine est la date : deux téléphones ont la même route. */
+function mulberry32(graine) {
+  let a = graine >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function graineDuJour(date = new Date()) {
+  return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
+function aleatoire() {
+  return generateur();
+}
+
+function initialiserGenerateur(mode) {
+  generateur = mode === "defi" ? mulberry32(graineDuJour()) : Math.random;
 }
 
 /* ---------- 3. Images ---------- */
@@ -902,6 +935,10 @@ let particules = [];
 /* État propre à la course : temps, pénalités, classement et rivaux. */
 let course = null;
 let rivaux = [];
+let chrono = null;      // { restant, prochainCheckpoint, passages, distance }
+let zen = null;         // { panneau, heure, ... }
+let generateur = Math.random;  // PRNG (graine du jour en Défi, Math.random sinon)
+let defiOfficiel = false;      // vrai si c'est la première tentative du jour
 
 affichageRecord.textContent = 0;
 boutonSon.textContent = son.actif ? "🔊" : "🔇";
@@ -1007,8 +1044,15 @@ function formatTemps(secondes) {
 
 function rafraichirRecordAffiche() {
   const nom = nomJoueur || lireStockage(CLE_DERNIER_NOM, "");
-  record = lireRecord(modeActuel, nom);
-  affichageRecord.textContent = modeActuel === "course" ? formatTemps(record) : record;
+  if (modeActuel === "defi") {
+    record = parseInt(lireStockage(cleDefi(), "0"), 10) || 0;
+  } else {
+    record = lireRecord(modeActuel, nom);
+  }
+  if (modeActuel === "course") affichageRecord.textContent = formatTemps(record);
+  else if (modeActuel === "chrono") affichageRecord.textContent = record + " m";
+  else if (modeActuel === "zen") affichageRecord.textContent = "—";
+  else affichageRecord.textContent = record;
 }
 
 /* Fin de course : classement, temps total, pénalités et meilleur temps. */
@@ -1215,6 +1259,35 @@ function rejouer() {
 function remplirEcranFin(ancienRecord) {
   const scoreFinal = Math.round(score);
   const metres = Math.round(defilement / PX_PAR_METRE);
+
+  if (modeActuel === "chrono") {
+    if (finTitre) finTitre.textContent = "Bien joué " + nomJoueur + " !";
+    if (finResultat) finResultat.textContent = metres + " m parcourus";
+    if (finDetails) finDetails.textContent = "Checkpoints : " + (chrono ? chrono.passages : 0)
+      + " • Record : " + ancienRecord + " m";
+    if (finMessage) {
+      finMessage.textContent = metres > ancienRecord
+        ? "Bravo " + nomJoueur + ", nouvelle distance record !"
+        : "Encore " + (ancienRecord - metres) + " m pour battre ton record.";
+    }
+    return;
+  }
+
+  if (modeActuel === "defi") {
+    const d = new Date();
+    const jour = d.getDate() + "/" + (d.getMonth() + 1);
+    if (finTitre) finTitre.textContent = "Défi du " + jour + " : " + scoreFinal + " points";
+    if (finResultat) finResultat.textContent = scoreFinal + " points";
+    if (finDetails) finDetails.textContent = defiOfficiel
+      ? "Tentative officielle enregistrée pour " + nomJoueur
+      : "Entraînement — ton score du jour est déjà enregistré";
+    if (finMessage) finMessage.textContent = defiOfficiel
+      ? "Même route pour tout le monde aujourd'hui !"
+      : "Seule la première tentative compte pour le défi.";
+    if (boutonCopierDefi) boutonCopierDefi.hidden = false;
+    return;
+  }
+  if (boutonCopierDefi) boutonCopierDefi.hidden = true;
   if (finTitre) finTitre.textContent = "Bien joué " + nomJoueur + " : " + scoreFinal + " points !";
   if (finResultat) finResultat.textContent = scoreFinal + " points";
   if (finDetails) {
@@ -1237,28 +1310,40 @@ function remplirEcranFin(ancienRecord) {
    Esquive utilise exactement la boucle et le score historiques.
    Pour un nouveau mode : compléter ces quatre fonctions (et MODES). */
 function preparerMode(mode) {
+  initialiserGenerateur(mode);
+  rivaux = [];
+  course = null;
+  chrono = null;
+  zen = null;
   if (mode === "course") preparerCourse();
-  else {
-    rivaux = [];
-    course = null;
-  }
+  else if (mode === "chrono") preparerChrono();
+  else if (mode === "zen") preparerZen();
+  else if (mode === "defi") preparerDefi();
 }
 
 function mettreAJourMode(dt) {
   if (modeActuel === "course") mettreAJourCourse(dt);
+  else if (modeActuel === "chrono") mettreAJourChrono(dt);
+  else if (modeActuel === "zen") mettreAJourZen(dt);
 }
 
 function verifierFinMode() {
-  // Esquive se termine par la collision ; Course par la ligne d'arrivée.
+  // Esquive et Défi se terminent par la collision ; Course par l'arrivée ;
+  // Chrono par l'épuisement du temps ; Zen n'a jamais de fin.
   if (modeActuel === "course" && course && course.distance >= COURSE_DISTANCE_M) {
     etablirClassement();
     return { type: "position", valeur: course.position, message: course.position + "e place" };
+  }
+  if (modeActuel === "chrono" && chrono && chrono.restant <= 0) {
+    return { type: "distance", valeur: Math.round(chrono.distance), message: chrono.distance + " m" };
   }
   return null;
 }
 
 function dessinerInterfaceMode() {
   if (modeActuel === "course") dessinerInterfaceCourse();
+  else if (modeActuel === "chrono") dessinerInterfaceChrono();
+  else if (modeActuel === "zen") dessinerInterfaceZen();
 }
 
 /* ---------- Course : grille de départ, rivaux et classement ---------- */
@@ -1624,6 +1709,156 @@ function dessinerInterfaceCourse() {
   }
 }
 
+/* ---------- Chrono : 30 s, checkpoints, distance ---------- */
+function preparerChrono() {
+  chrono = {
+    restant: CHRONO_DEPART_S,
+    distance: 0,
+    prochainCheckpoint: CHRONO_CHECKPOINT_M,
+    passages: 0,
+    dernierBip: CHRONO_DEPART_S
+  };
+  score = 0;
+  affichageScore.textContent = "0";
+}
+
+function mettreAJourChrono(dt) {
+  if (!chrono) return;
+  chrono.distance = defilement / PX_PAR_METRE;
+  score = Math.round(chrono.distance);
+  affichageScore.textContent = score;
+  chrono.restant -= dt;
+
+  const seconde = Math.ceil(chrono.restant);
+  if (seconde !== chrono.dernierBip && seconde > 0) {
+    chrono.dernierBip = seconde;
+    if (seconde <= 5) jouerBip(880, 0.1, "square", 0.08);
+    else if (seconde <= 10) jouerBip(660, 0.08, "square", 0.06);
+  }
+
+  if (chrono.distance >= chrono.prochainCheckpoint) {
+    chrono.passages++;
+    const gain = difficulte().tempsCheckpoint;
+    chrono.restant += gain;
+    chrono.dernierBip = Math.ceil(chrono.restant);
+    chrono.prochainCheckpoint += CHRONO_CHECKPOINT_M * Math.pow(CHRONO_CROISSANCE, chrono.passages);
+    chrono.prochainCheckpoint = Math.round(chrono.prochainCheckpoint);
+    ajouterTexteFlottant("+" + gain + " s", LARGEUR / 2, HAUTEUR * 0.3, "#ffd23f", 34);
+    sonCombo(2);
+    afficherMessage("Checkpoint " + chrono.passages + " : +" + gain + " s");
+  }
+}
+
+function dessinerInterfaceChrono() {
+  if (!chrono) return;
+  const temps = Math.max(0, chrono.restant);
+  const couleur = temps < 5 ? "#ff4d4d" : (temps < 10 ? "#ff9a3c" : "#ffd23f");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.beginPath();
+  rectangleArrondi(LARGEUR / 2 - 72, 6, 144, 52, 10);
+  ctx.fill();
+  ctx.font = "900 34px Arial";
+  ctx.fillStyle = couleur;
+  ctx.fillText(temps.toFixed(1).replace(".", ",") + " s", LARGEUR / 2, 32);
+  ctx.font = "bold 12px Arial";
+  ctx.fillStyle = "#ffffff";
+  const restant = Math.max(0, Math.round(chrono.prochainCheckpoint - chrono.distance));
+  ctx.fillText("CHECKPOINT dans " + restant + " m", LARGEUR / 2, 72);
+}
+
+/* ---------- Zen : rouler sans perdre, météo et heure choisies ---------- */
+function preparerZen() {
+  zen = { panneau: false, heure: "jour", boutons: [] };
+  meteo.actuelle = "sec";
+}
+
+function mettreAJourZen(dt) {
+  // Vitesse limitée, pas de fin de partie, aucun record écrit.
+  joueur.vitesse = Math.min(joueur.vitesse, kmhVersPx(ZEN_VITESSE_MAX_KMH));
+}
+
+function forcerMeteo(type) {
+  if (!METEOS[type]) return;
+  meteo.actuelle = type;
+  meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M;
+  meteo.annonce = 2;
+  afficherMessage("Météo : " + METEOS[type].nom.toLowerCase());
+}
+
+function actionZen(action) {
+  if (!zen) return;
+  if (action === "sec" || action === "pluie" || action === "verglas") forcerMeteo(action);
+  else if (action === "jour" || action === "nuit") {
+    zen.heure = action;
+    afficherMessage(action === "nuit" ? "Mode nuit" : "Mode jour");
+  } else if (action === "info") zen.panneau = !zen.panneau;
+  else if (action === "quitter") afficherChoixMode();
+}
+
+function dessinerInterfaceZen() {
+  if (!zen) return;
+  const boutons = [
+    { x: 26, y: HAUTEUR - 104, w: 96, h: 38, label: "☀ Sec", action: "sec" },
+    { x: 132, y: HAUTEUR - 104, w: 96, h: 38, label: "☂ Pluie", action: "pluie" },
+    { x: 238, y: HAUTEUR - 104, w: 96, h: 38, label: "❄ Verglas", action: "verglas" },
+    { x: 26, y: HAUTEUR - 58, w: 76, h: 40, label: "☀ Jour", action: "jour" },
+    { x: 110, y: HAUTEUR - 58, w: 76, h: 40, label: "☾ Nuit", action: "nuit" },
+    { x: 194, y: HAUTEUR - 58, w: 66, h: 40, label: "📊 Info", action: "info" },
+    { x: 268, y: HAUTEUR - 58, w: 66, h: 40, label: "✕ Sortir", action: "quitter" }
+  ];
+  zen.boutons = boutons;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const b of boutons) {
+    ctx.fillStyle = "rgba(8, 14, 24, 0.82)";
+    ctx.beginPath();
+    rectangleArrondi(b.x, b.y, b.w, b.h, 9);
+    ctx.fill();
+    ctx.strokeStyle = b.action === meteo.actuelle || b.action === zen.heure ? "#ffd23f" : "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.font = "bold 12px Arial";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2);
+  }
+
+  if (!zen.panneau) return;
+  const v = joueur.vitesse / PX_PAR_METRE;                       // m/s
+  const mu = adherence();
+  const forceMoteur = joueur.accelerateur * Math.min(forceAdherence(), PUISSANCE_MAX / Math.max(v, 1));
+  const decelMax = FORCE_FREIN_MAX / MASSE + mu * G;
+  const distanceFreinage = (v * v) / (2 * decelMax);
+  const x = LARGEUR / 2 - 104;
+  const y = 122;
+  ctx.fillStyle = "rgba(6, 12, 22, 0.86)";
+  ctx.beginPath();
+  rectangleArrondi(x, y, 208, 106, 10);
+  ctx.fill();
+  ctx.font = "bold 12px Arial";
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillText("PANNEAU PÉDAGOGIQUE", LARGEUR / 2, y + 15);
+  ctx.font = "12px Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("μ = " + mu.toFixed(2).replace(".", ","), x + 12, y + 36);
+  ctx.fillText("v = " + v.toFixed(1).replace(".", ",") + " m/s", x + 12, y + 55);
+  ctx.fillText("F moteur = " + Math.round(forceMoteur) + " N", x + 12, y + 74);
+  ctx.fillText("ax = " + Math.abs(joueur.ax / PX_PAR_METRE).toFixed(1).replace(".", ",") + " m/s²", x + 12, y + 93);
+  ctx.fillText("freinage = " + distanceFreinage.toFixed(0) + " m", x + 112, y + 36);
+  ctx.fillText("adhérence = " + Math.round(forceAdherence()) + " N", x + 112, y + 55);
+}
+
+/* ---------- Défi du jour ---------- */
+function cleDefi() {
+  return "defi." + graineDuJour() + "." + nomJoueur;
+}
+
+function preparerDefi() {
+  // La graine est posée par preparerMode -> initialiserGenerateur("defi").
+  // Une seule tentative comptée par jour et par joueur.
+}
+
 /* ---------- 6. Commandes ---------- */
 function allerAGauche() {
   if (etat !== "jeu" && etat !== "compte") return;
@@ -1775,8 +2010,21 @@ document.addEventListener("pointerup", function (evenement) {
   const simpleToucher = !geste.aGlisse && distance < SEUIL_TOUCHER && duree < DUREE_TOUCHER;
 
   if (simpleToucher) {
+    const rect = canvas.getBoundingClientRect();
+    // Mode Zen : les boutons dessinés sur le Canvas ont priorité sur le swipe.
+    if (modeActuel === "zen" && zen && zen.boutons && geste.surCanvas) {
+      const px = (evenement.clientX - rect.left) * LARGEUR / (rect.width || LARGEUR);
+      const py = (evenement.clientY - rect.top) * HAUTEUR / (rect.height || HAUTEUR);
+      const bouton = zen.boutons.find(function (b) {
+        return px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+      });
+      if (bouton) {
+        actionZen(bouton.action);
+        geste = null;
+        return;
+      }
+    }
     if (geste.surCanvas && (etat === "jeu" || etat === "compte")) {
-      const rect = canvas.getBoundingClientRect();
       if (evenement.clientX - rect.left < rect.width / 2) allerAGauche();
       else allerADroite();
     }
@@ -2048,14 +2296,14 @@ function creerVaguesDeTrafic(dt) {
 function creerVague() {
   // Une ou deux voitures : il reste toujours au moins une voie libre
   const probaDeux = Math.min(0.55, 0.2 + voituresEvitees * 0.015);
-  const nombre = Math.random() < probaDeux ? 2 : 1;
-  const voieLibre = Math.floor(Math.random() * NB_VOIES);
+  const nombre = aleatoire() < probaDeux ? 2 : 1;
+  const voieLibre = Math.floor(aleatoire() * NB_VOIES);
 
   const voies = [];
   for (let v = 0; v < NB_VOIES; v++) {
     if (v !== voieLibre) voies.push(v);
   }
-  if (nombre === 1) voies.splice(Math.floor(Math.random() * 2), 1);
+  if (nombre === 1) voies.splice(Math.floor(aleatoire() * 2), 1);
 
   for (const voie of voies) {
     creerObstacle(voie);
@@ -2066,7 +2314,7 @@ function creerObstacle(voie) {
   obstacles.push({
     voie: voie,
     x: centreVoie(voie),
-    y: -VOITURE_HAUTEUR - 10 - Math.random() * 40, // juste au-dessus du Canvas
+    y: -VOITURE_HAUTEUR - 10 - aleatoire() * 40, // juste au-dessus du Canvas
     vitesse: kmhVersPx(VITESSE_TRAFIC_KMH),
     vx: 0,
     angle: 0,
@@ -2074,8 +2322,8 @@ function creerObstacle(voie) {
     accidente: false,
     compte: false,
     ecartMin: Infinity, // plus petit écart latéral avec le joueur (frôlement)
-    phase: Math.random() * 6.28, // pour le léger louvoiement sur le verglas
-    image: imagesAdverses[Math.floor(Math.random() * imagesAdverses.length)]
+    phase: aleatoire() * 6.28, // pour le léger louvoiement sur le verglas
+    image: imagesAdverses[Math.floor(aleatoire() * imagesAdverses.length)]
   });
 }
 
@@ -2107,6 +2355,20 @@ function deplacerObstacles(dt) {
 // Un obstacle est évité quand il est entièrement passé sous la voiture du joueur
 function verifierObstaclesEvites() {
   for (const o of obstacles) {
+    if (modeActuel === "chrono") {
+      // Pas de points : un frôlement rapporte une seconde au chrono.
+      if (!o.compte && !o.accidente && o.y > joueur.y + VOITURE_HAUTEUR) {
+        o.compte = true;
+        if (o.ecartMin < SEUIL_FROLEMENT && chrono) {
+          chrono.restant += CHRONO_FROLEMENT_S;
+          ajouterTexteFlottant("+1 s", joueur.x, joueur.y - 40, "#5ee7ff", 26);
+          sonFrolement();
+        } else {
+          sonDepassement();
+        }
+      }
+      continue;
+    }
     if (modeActuel === "course") {
       // Pas de score en course, mais les frôlements rechargent toujours le nitro.
       if (!o.compte && !o.accidente && o.y > joueur.y + VOITURE_HAUTEUR) {
@@ -2156,7 +2418,16 @@ function verifierCollisions() {
     verifierCollisionsCourse();
     return;
   }
-  if (!mode.collisionFatale) return;
+  if (!mode.collisionFatale) {
+    // Chrono et Zen : un choc ralentit et fait clignoter, sans fin de partie.
+    for (const o of obstacles) {
+      if (!o.accidente && seChevauchent(rectJoueur, rectangle(o))) {
+        chocNonFatal(o);
+        break;
+      }
+    }
+    return;
+  }
   const rectJoueur = rectangle(joueur);
   for (const o of obstacles) {
     if (seChevauchent(rectJoueur, rectangle(o))) {
@@ -2199,6 +2470,19 @@ function declencherAccident(obstacle) {
   dureeAccident = 0;
   zoneMessage.classList.add("perdu");
   afficherMessage("Partie terminée !");
+}
+
+// Choc sans élimination (Chrono, Zen) : la voiture ralentit et clignote.
+function chocNonFatal(obstacle) {
+  joueur.vitesse *= 0.55;
+  joueur.vx += (joueur.x <= obstacle.x ? -1 : 1) * 40;
+  obstacle.accidente = true;
+  tremblement = Math.max(tremblement, 5);
+  creerEtincelles((joueur.x + obstacle.x) / 2, obstacle.y + VOITURE_HAUTEUR / 2, 12);
+  sonAccident(0.3);
+  zoneMessage.classList.add("perdu");
+  setTimeout(function () { zoneMessage.classList.remove("perdu"); }, 350);
+  afficherMessage(modeActuel === "zen" ? "Petit choc — on continue !" : "Choc ! Vous perdez du temps.");
 }
 
 // Frottement de glissement : décélération constante μ·g, jusqu'à l'arrêt
@@ -2470,8 +2754,11 @@ function mettreAJourMeteo(dt) {
   meteo.annonce = Math.max(0, meteo.annonce - dt);
 
   if (etat === "jeu") {
-    meteo.distanceRestante -= joueur.vitesse * dt / PX_PAR_METRE;
-    if (meteo.distanceRestante <= 0) changerMeteo();
+    // En Zen, la météo reste celle choisie par le joueur.
+    if (modeActuel !== "zen") {
+      meteo.distanceRestante -= joueur.vitesse * dt / PX_PAR_METRE;
+      if (meteo.distanceRestante <= 0) changerMeteo();
+    }
     creerDangers(dt);
   }
   deplacerDangers(dt);
@@ -2484,10 +2771,10 @@ function changerMeteo() {
   const mode = MODES[modeActuel];
   let suivante = "sec";
   if (meteo.actuelle === "sec" && mode && mode.meteo) {
-    suivante = Math.random() < difficulte().probabiliteVerglas ? "verglas" : "pluie";
+    suivante = aleatoire() < difficulte().probabiliteVerglas ? "verglas" : "pluie";
   }
   meteo.actuelle = suivante;
-  meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M * (0.8 + Math.random() * 0.4);
+  meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M * (0.8 + aleatoire() * 0.4);
   meteo.annonce = 2.6;
   if (suivante === "pluie") sonTonnerre();
   else if (suivante === "verglas") sonGivre();
@@ -2500,16 +2787,16 @@ function creerDangers(dt) {
   const intensite = Math.max(meteo.intensitePluie, meteo.intensiteVerglas);
   if (intensite < 0.6) return;
   distanceDanger += joueur.vitesse * dt;
-  if (distanceDanger < 900 + Math.random() * 600) return;
+  if (distanceDanger < 900 + aleatoire() * 600) return;
   distanceDanger = 0;
-  const voie = Math.floor(Math.random() * NB_VOIES);
+  const voie = Math.floor(aleatoire() * NB_VOIES);
   const estPluie = meteo.intensitePluie > meteo.intensiteVerglas;
   dangers.push({
     type: estPluie ? "flaque" : "verglas",
-    x: centreVoie(voie) + (Math.random() - 0.5) * 16,
+    x: centreVoie(voie) + (aleatoire() - 0.5) * 16,
     y: -120,
-    largeur: LARGEUR_VOIE * (0.8 + Math.random() * 0.25),
-    hauteur: 55 + Math.random() * 35,
+    largeur: LARGEUR_VOIE * (0.8 + aleatoire() * 0.25),
+    hauteur: 55 + aleatoire() * 35,
     touche: false
   });
 }
@@ -2636,6 +2923,10 @@ function dessinerScene() {
 /* Cycle jour / nuit : position dans le cycle selon la distance parcourue.
    Renvoie l'obscurité (0 = plein jour, 1 = nuit) et une teinte de ciel. */
 function ambiance() {
+  // En Zen, l'heure est choisie par le joueur au lieu de suivre la distance.
+  if (modeActuel === "zen" && zen) {
+    return zen.heure === "nuit" ? { obscurite: 1, teinte: null } : { obscurite: 0, teinte: null };
+  }
   const position = ((defilement / PX_PAR_METRE) / LONGUEUR_CYCLE_M) % 1;
   const lisser = function (k) {
     return k * k * (3 - 2 * k);
@@ -3141,7 +3432,17 @@ function terminerPartie() {
   }
 
   // Record mis à jour AVANT l'affichage de l'écran de fin
-  const ancienRecord = lireRecord(modeActuel, nomJoueur);
+  let ancienRecord;
+  if (modeActuel === "defi") {
+    const cle = cleDefi();
+    defiOfficiel = lireStockage(cle, null) === null;
+    if (defiOfficiel) ecrireStockage(cle, String(score));
+    ancienRecord = defiOfficiel ? 0 : (parseInt(lireStockage(cle, "0"), 10) || 0);
+    record = score;
+    affichageRecord.textContent = record;
+  } else {
+    ancienRecord = lireRecord(modeActuel, nomJoueur);
+  }
   if (score > ancienRecord) {
     record = score;
     ecrireRecord(modeActuel, nomJoueur, record);
@@ -3191,6 +3492,26 @@ function initialiserInterface() {
   if (caseNePlusAfficher) {
     caseNePlusAfficher.addEventListener("change", function () {
       ecrireStockage(CLE_NE_PLUS_AFFICHER, caseNePlusAfficher.checked ? "1" : "0");
+    });
+  }
+  if (boutonCopierDefi) {
+    boutonCopierDefi.addEventListener("click", function () {
+      const texte = (finTitre ? finTitre.textContent + " — " : "")
+        + (finResultat ? finResultat.textContent : "");
+      try {
+        const zone = document.createElement("textarea");
+        zone.value = texte;
+        zone.setAttribute("readonly", "");
+        zone.style.position = "fixed";
+        zone.style.opacity = "0";
+        document.body.appendChild(zone);
+        zone.select();
+        document.execCommand("copy");
+        document.body.removeChild(zone);
+        afficherMessage("Résultat copié !");
+      } catch (e) {
+        afficherMessage("Résultat à copier : " + texte);
+      }
     });
   }
   if (boutonRejouer) boutonRejouer.addEventListener("click", rejouer);

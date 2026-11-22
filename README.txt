@@ -34,9 +34,9 @@ COMMANDES
 
 ÉCRANS
   - Accueil : saisie du nom + noms récents.
-  - Choix du mode : cartes générées depuis MODES (Esquive et Course
-    disponibles, Chrono / Zen / Défi marqués « Bientôt »), record affiché
-    pour chaque mode et le joueur courant, dernier mode joué mis en avant.
+  - Choix du mode : cartes générées depuis MODES (les 5 modes sont
+    disponibles), record affiché pour chaque mode et le joueur courant,
+    dernier mode joué mis en avant.
   - Règles : 3 lignes de règles avant de lancer le mode.
   - Fin de partie : score, combo max, frôlements, distance parcourue,
     message de record, puis Rejouer / Changer de mode / Changer de joueur.
@@ -89,8 +89,9 @@ RÈGLES
   - La vitesse augmente avec le nombre de voitures dépassées ; le départ,
     le plafond et la densité du trafic dépendent de la difficulté choisie
     (voir DIFFICULTÉ). Le nitro ajoute +70 km/h.
-  - Une collision termine la partie. Le meilleur score du joueur pour ce
-    mode est conservé (record par joueur et par mode).
+  - En Esquive et Défi du jour, une collision termine la partie. Le meilleur
+    score du joueur pour ce mode est conservé (record par joueur et par mode).
+    En Course, Chrono et Zen, un choc ne fait que ralentir.
 
 MODE COURSE
   - Grille de départ : 5 feux rouges, puis feu vert, départ arrêté.
@@ -115,10 +116,38 @@ MODE COURSE
   - Fin : classement, temps total, pénalités et meilleur temps du joueur
     (record.course.<nom>, affiché en mm:ss,centièmes).
 
+MODE CHRONO
+  - Le chrono démarre à 30 s et descend. Tous les 800 m, un portique ajoute
+    le temps checkpoint de la difficulté (20 / 15 / 10 s). L'espacement
+    augmente de 12 % à chaque passage.
+  - Un frôlement rapporte +1 s ; un choc avec le trafic fait perdre beaucoup
+    de vitesse mais ne termine pas la partie.
+  - Fin à 0 s : le résultat est la distance parcourue, mémorisée par joueur.
+  - Le chrono suit le temps de jeu : le ralenti des frôlements le ralentit
+    aussi. Il passe à l'orange sous 10 s, au rouge sous 5 s avec un bip.
+
+MODE ZEN
+  - Aucune fin de partie : un choc ralentit et fait clignoter la voiture.
+  - Trafic léger, vitesse plafonnée à 110 km/h, aucun record enregistré.
+  - Boutons sur le Canvas : météo (sec / pluie / verglas), heure (jour / nuit),
+    panneau pédagogique et Sortir. La météo change avec la même transition
+    douce qu'en jeu ; l'heure force le cycle jour/nuit.
+  - Le panneau affiche les vraies variables de la physique : μ, vitesse en
+    m/s, force du moteur, accélération latérale et distance de freinage.
+
+DÉFI DU JOUR
+  - La graine du générateur mulberry32 est la date (AAAAMMDD) : deux
+    téléphones génèrent exactement la même route le même jour.
+  - Seuls le trafic, la météo et les dangers utilisent cette graine ; les
+    effets purement visuels restent aléatoires.
+  - Une seule tentative officielle par jour et par joueur, mémorisée dans
+    defi.<date>.<nom> ; les suivantes sont des entraînements.
+  - Écran de fin « Défi du 22/11 : 47 points » avec bouton Copier le résultat.
+
 TESTS
-  node tests/verification.mjs  → 17 vérifications headless (parcours complet,
-  records, difficulté, boucle unique, grille de course et 60 s de rivaux
-  sans accident).
+  node tests/verification.mjs  → 20 vérifications headless (parcours complet,
+  records, difficulté, boucle unique, grille de course, 60 s de rivaux sans
+  accident, checkpoints Chrono, limites Zen et stabilité de la graine du jour).
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
   - Moteur : m·a = F_moteur − F_traînée − F_roulement,
