@@ -51,6 +51,79 @@
         <p id="message" class="message">Glissez le doigt ou utilisez les flèches.</p>
         <button id="boutonRecommencer" class="bouton-recommencer" type="button">Démarrer</button>
       </div>
+
+      <div id="ecrans" class="ecrans">
+        <section id="ecranAccueil" class="ecran" aria-labelledby="titreAccueil">
+          <h2 id="titreAccueil">Bienvenue !</h2>
+          <label for="nomJoueur">Comment t'appelles-tu ?</label>
+          <input
+            id="nomJoueur"
+            type="text"
+            maxlength="12"
+            autocomplete="nickname"
+            placeholder="Léa"
+            aria-describedby="erreurNom"
+          />
+          <p id="erreurNom" class="erreur" role="alert" hidden></p>
+          <button id="boutonContinuer" type="button" disabled>Continuer ▶</button>
+          <div id="nomsRecents" class="noms-recents" hidden></div>
+        </section>
+
+        <section id="ecranChoixMode" class="ecran" hidden aria-labelledby="titreChoixMode">
+          <div class="ligne-joueur">
+            <span id="joueurActuel">Salut Léa !</span>
+            <button id="boutonChangerJoueur" type="button">changer ✎</button>
+          </div>
+          <h2 id="titreChoixMode">Choisis ton mode de jeu</h2>
+          <div id="cartesModes" class="cartes-modes"></div>
+          <fieldset class="difficultes">
+            <legend>Difficulté</legend>
+            <label
+              ><input id="difficulteFacile" type="radio" name="difficulte" value="facile" />
+              Facile</label
+            >
+            <label
+              ><input id="difficulteNormal" type="radio" name="difficulte" value="normal" checked />
+              Normal</label
+            >
+            <label
+              ><input id="difficulteDifficile" type="radio" name="difficulte" value="difficile" />
+              Difficile</label
+            >
+          </fieldset>
+        </section>
+
+        <section
+          id="ecranRegles"
+          class="ecran modale"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reglesTitre"
+          hidden
+        >
+          <h2 id="reglesTitre">Règles du mode Esquive</h2>
+          <ul id="reglesTexte"></ul>
+          <label class="ne-plus-afficher"
+            ><input id="caseNePlusAfficher" type="checkbox" /> Ne plus afficher</label
+          >
+          <div class="actions-modale">
+            <button id="boutonFermerRegles" type="button">Retour</button>
+            <button id="boutonLancerMode" type="button">C'est parti !</button>
+          </div>
+        </section>
+
+        <section id="ecranFin" class="ecran" hidden aria-labelledby="finTitre">
+          <h2 id="finTitre">Bien joué Léa !</h2>
+          <p id="finResultat" class="fin-resultat">52 points</p>
+          <p id="finDetails" class="fin-details">Combo max ×3 · 4 frôlements · 1,2 km</p>
+          <p id="finMessage" class="fin-message">Nouveau record !</p>
+          <div class="actions-fin">
+            <button id="boutonRejouer" type="button">Rejouer</button>
+            <button id="boutonChangerMode" type="button">Changer de mode</button>
+            <button id="boutonChangerJoueurFin" type="button">Changer de joueur</button>
+          </div>
+        </section>
+      </div>
     </main>
 
     <!-- Le jeu est découpé en modules ES : il doit être servi par http(s), pas ouvert via file:// -->

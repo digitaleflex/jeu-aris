@@ -48,39 +48,40 @@ flowchart TB
 
 Une couche ne peut importer que sa propre couche et celles du dessous. Concrètement :
 
-| Couche         | Dossiers et fichiers                                                                 | Peut importer                  |
-| -------------- | ------------------------------------------------------------------------------------ | ------------------------------ |
-| **Base**       | `config/`, `utilitaires/`, `evenements.js`                                           | base                           |
-| **Cœur**       | `etat/`, `route/`, `physique/`, `meteo/`, `systemes/`, `modes/`, `environnement/`, `simulation.js` | base, cœur       |
-| **Périphérie** | `rendu/`, `audio/`, `ui/`, `entrees/`, `plateforme/`                                 | base, cœur, périphérie         |
-| **Assemblage** | `main.js`, `boucle.js`                                                               | tout                           |
+| Couche         | Dossiers et fichiers                                                                               | Peut importer          |
+| -------------- | -------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Base**       | `config/`, `utilitaires/`, `evenements.js`                                                         | base                   |
+| **Cœur**       | `etat/`, `route/`, `physique/`, `meteo/`, `systemes/`, `modes/`, `environnement/`, `simulation.js` | base, cœur             |
+| **Périphérie** | `rendu/`, `audio/`, `ui/`, `entrees/`, `plateforme/`                                               | base, cœur, périphérie |
+| **Assemblage** | `main.js`, `boucle.js`                                                                             | tout                   |
 
 ## Plan des modules
 
-| Dossier          | Rôle                                                                                          |
-| ---------------- | --------------------------------------------------------------------------------------------- |
-| `config/`        | Données : constantes, `VEHICULES`, `METEOS`, réglages, règles (nitro, combos…). Pas de logique. |
-| `etat/`          | `creerEtatJeu`, `reinitialiserPartie`, `PHASES` ; `phases.js` : départ, compte à rebours, fin.  |
-| `route/`         | `creerRoute({ nbVoies, gauche, largeur })` : géométrie, `centreVoie(n)`.                       |
-| `physique/`      | `moteur.js` (F = ma), `direction.js` (ressort amorti, glisse, traces), `collisions.js`, `frottement.js`. |
-| `meteo/`         | `conditions.js` (adhérence μ, fonctions pures), `meteo.js` (évolution), `dangers.js` (flaques, plaques), `effets.js` (gouttes, flocons). |
-| `systemes/`      | `trafic.js`, `score.js` (points, combos, frôlements), `nitro.js`, `accident.js`, `pilotage.js` (changer de voie), `particules.js`. |
-| `modes/`         | Règles d'un mode de jeu (`esquive.js`). Voir « Ajouter un mode ».                              |
-| `environnement/` | `cycleJour.js` : obscurité et teinte du ciel selon la distance.                                |
-| `simulation.js`  | `mettreAJour(jeu, dt)` : un pas de simulation ; `avancerSimulation` : pas fixes.               |
-| `rendu/`         | Dessin par couches : route, véhicules, particules, ambiance (nuit), interface.                  |
-| `audio/`         | Contexte Web Audio, sons continus (moteur, pneus), effets, branchement sur les événements.     |
-| `ui/`            | `hud.js` : score, record, vitesse, message, boutons.                                           |
-| `entrees/`       | `clavier.js`, `tactile.js`, `boutons.js` → tous appellent les mêmes `commandes`.               |
-| `boucle.js`      | `requestAnimationFrame` : simulation → sons → dessin → HUD.                                    |
-| `main.js`        | Assemble tout. Expose `window.jeuAris` pour le débogage et les tests.                          |
+| Dossier          | Rôle                                                                                                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config/`        | Données : constantes, `VEHICULES`, `METEOS`, `DIFFICULTES`, réglages, règles (nitro, combos…). Pas de logique.                                                                     |
+| `etat/`          | `jeu.js` (état, `PHASES`, remise à zéro) ; `phases.js` (départ, compte à rebours, fin) ; `navigation.js` (accueil → modes → règles) ; `preferences.js` (nom, difficulté, records). |
+| `route/`         | `creerRoute({ nbVoies, gauche, largeur })` : géométrie, `centreVoie(n)`.                                                                                                           |
+| `physique/`      | `moteur.js` (F = ma), `direction.js` (ressort amorti, glisse, traces), `collisions.js`, `frottement.js`.                                                                           |
+| `meteo/`         | `conditions.js` (adhérence μ, fonctions pures), `meteo.js` (évolution), `dangers.js` (flaques, plaques), `effets.js` (gouttes, flocons).                                           |
+| `systemes/`      | `trafic.js`, `score.js` (points, combos, frôlements), `nitro.js`, `accident.js`, `pilotage.js` (changer de voie), `particules.js`.                                                 |
+| `modes/`         | `modes.js` (type `Mode`, registre `MODES`), `esquive.js` et `aVenir.js` (données), `regles.js` (règles standard d'une partie). Voir « Ajouter un mode ».                           |
+| `environnement/` | `cycleJour.js` : obscurité et teinte du ciel selon la distance.                                                                                                                    |
+| `simulation.js`  | `mettreAJour(jeu, dt)` : un pas de simulation ; `avancerSimulation` : pas fixes.                                                                                                   |
+| `rendu/`         | Dessin par couches : route, véhicules, particules, ambiance (nuit), interface.                                                                                                     |
+| `audio/`         | Contexte Web Audio, sons continus (moteur, pneus), effets, branchement sur les événements.                                                                                         |
+| `ui/`            | `hud.js` (score, record, vitesse, message, boutons) et `ecrans.js` (accueil, choix du mode, règles, fin).                                                                          |
+| `entrees/`       | `clavier.js`, `tactile.js`, `boutons.js` → tous appellent les mêmes `commandes`.                                                                                                   |
+| `boucle.js`      | `requestAnimationFrame` : simulation → sons → dessin → HUD.                                                                                                                        |
+| `main.js`        | Assemble tout. Expose `window.jeuAris` pour le débogage et les tests.                                                                                                              |
 
 ## L'état d'une partie
 
 `creerEtatJeu()` renvoie un `EtatJeu` (voir les types JSDoc dans `src/etat/jeu.js`). Ses grandes parties :
 
-- **Contexte** : `route`, `mode`, `reglages`, `alea`, `evenements`.
-- **Déroulement** : `phase`, `score`, `record`, `compteARebours`, `message`.
+- **Contexte** : `route`, `mode`, `reglages` (dérivés de `difficulteId`), `alea`, `evenements`.
+- **Joueur et écrans** : `nomJoueur`, `reglesMode` (règles affichées par-dessus le choix du mode).
+- **Déroulement** : `phase`, `score`, `record`, `ancienRecord`, `compteARebours`, `message`.
 - **Voitures** : `joueur` (une `Voiture`), `obstacles` (le trafic).
 - **Systèmes** : `nitro`, `meteo`, `dangers`, `particules`, `traces`, `textesFlottants`.
 - **Effets de jeu** : `serie` (combo), `tremblement`, `ralentiRestant`, `defilement` (distance).
@@ -89,13 +90,45 @@ Une couche ne peut importer que sa propre couche et celles du dessous. Concrète
 
 ```mermaid
 stateDiagram-v2
-    [*] --> attente
-    attente --> compte: démarrer
-    fini --> compte: rejouer
+    [*] --> accueil
+    accueil --> choixMode: nom valide
+    choixMode --> accueil: changer de joueur · Échap
+    choixMode --> compte: C'est parti !
     compte --> jeu: 3 · 2 · 1 · départ
     jeu --> accident: collision
     accident --> fini: voiture arrêtée
+    fini --> compte: rejouer
+    fini --> choixMode: changer de mode
+    fini --> accueil: changer de joueur
 ```
+
+Les **règles d'un mode** s'affichent par-dessus `choixMode` : ce n'est pas une phase mais
+`jeu.reglesMode` (identifiant du mode, ou `null`).
+
+## Écrans et navigation
+
+Accueil, choix du mode, règles et fin de partie sont des **écrans HTML** (`ui/ecrans.js`), posés par-dessus
+le Canvas. Ils sont **pilotés par l'état**, dans un seul sens :
+
+```mermaid
+flowchart LR
+    joueur["Le joueur<br/>(clic, touche)"] --> actions["actions<br/>(main.js)"]
+    actions --> nav["etat/navigation.js<br/>change phase, nom, mode…"]
+    nav -- "événement « navigation »" --> ecrans["ui/ecrans.js<br/>affiche l'écran de la phase"]
+    nav -- "événement « navigation »" --> hud["ui/hud.js"]
+```
+
+- `navigation.js` ne fait que **modifier l'état** (`confirmerNom`, `ouvrirRegles`, `selectionnerMode`,
+  `choisirDifficulte`…) puis émettre `navigation`. Il ne touche pas au DOM : il se teste sous Node.
+- `ecrans.js` affiche l'écran qui correspond à `jeu.phase` / `jeu.reglesMode` et place le focus
+  (champ du nom, carte sélectionnée, bouton « C'est parti ! », bouton « Rejouer »).
+- Lancer la partie elle-même (boucle d'animation) est le rôle de `boucle.js` : `main.js` combine les
+  deux dans les `actions` des écrans.
+- Le clavier a deux propriétaires : `ui/ecrans.js` quand un écran est ouvert (navigation), `entrees/clavier.js`
+  pendant la partie (commandes). Aucun des deux n'agit quand un champ de saisie a le focus.
+- Les préférences (nom, difficulté, dernier mode, « ne plus afficher ») et les records vivent dans
+  `etat/preferences.js`, qui passe par `utilitaires/stockage.js` : le support de stockage est
+  remplaçable, les tests utilisent un stockage en mémoire.
 
 ## Un pas de simulation
 
@@ -141,9 +174,9 @@ image (`ui/hud.js`).
 
 ## Le hasard
 
-| Besoin                                        | À utiliser                |
-| --------------------------------------------- | ------------------------- |
-| Ce qui change la partie (trafic, météo, choc)  | `jeu.alea()`              |
+| Besoin                                                              | À utiliser      |
+| ------------------------------------------------------------------- | --------------- |
+| Ce qui change la partie (trafic, météo, choc)                       | `jeu.alea()`    |
 | Effets purement visuels ou sonores (particules, tremblement, notes) | `Math.random()` |
 
 `jeu.alea` vaut `Math.random` par défaut. Avec `creerAleaAvecGraine(n)`, la partie est rejouable à
@@ -158,8 +191,8 @@ choisit la taille d'affichage et le nombre de pixels réels (densité de l'écra
 dessin n'en savent rien. Couches, du fond vers le dessus :
 
 route → chaussée (mouillée / givrée) → dangers → traces → particules au sol → voitures → particules
-en l'air → **ambiance** (coucher de soleil, nuit, phares) → givre → textes flottants → *(sans
-tremblement)* interface → annonce météo → écrans de texte.
+en l'air → **ambiance** (coucher de soleil, nuit, phares) → givre → textes flottants → _(sans
+tremblement)_ interface → annonce météo → écrans de texte.
 
 La nuit utilise un calque séparé : on le remplit d'obscurité puis on « efface » les cônes de phares
 (`destination-out`) avant de l'afficher.
@@ -168,23 +201,52 @@ La nuit utilise un calque séparé : on le remplit d'obscurité puis on « effac
 
 ### Ajouter un mode de jeu
 
-Un mode est un objet qui implémente le type `Mode` (voir `src/modes/esquive.js`) :
+Un mode est un objet du type `Mode` (voir `src/modes/modes.js`) : surtout des **données**, plus des
+crochets facultatifs. Les données alimentent l'écran de choix (carte, règles) et configurent les
+règles standard (`trafic`, `collisionFatale`, `meteo`…). Les modes « Course », « Chrono », « Zen » et
+« Défi » existent déjà dans `src/modes/aVenir.js`, avec `disponible: false`.
+
+Pour activer un mode : passez `disponible` à `true`, puis ajoutez les crochets dont il a besoin.
 
 ```js
 export const modeChrono = {
   id: 'chrono',
-  nom: 'Contre-la-montre',
-  messageDepart: 'Passez les checkpoints avant la fin du temps !',
-  chargerRecord: () => 0,
-  preparer(jeu) { /* état propre au mode */ },
-  mettreAJourPartie(jeu, dt) { /* règles : trafic, chrono, fin de partie… */ },
-  enregistrerResultat(jeu) { return { nouveauRecord: false }; },
+  nom: 'Chrono',
+  icone: '⏱️',
+  but: 'Bats le chrono',
+  regles: ['…', '…', '…'],
+  messageDepart: 'Le chrono tourne !',
+  trafic: true,
+  collisionFatale: true,
+  tempsLimite: 90,
+  score: 'temps',
+  meteo: true,
+  disponible: true,
+  preparer(jeu) {
+    jeu.chrono = 90;
+  }, // à chaque remise à zéro
+  mettreAJour(jeu, dt) {
+    jeu.chrono -= dt;
+  }, // à chaque pas de jeu
+  verifierFin(jeu) {
+    return jeu.chrono <= 0 ? { raison: 'temps' } : null;
+  },
+  dessinerInterface(ctx, jeu) {
+    /* dessine le chrono */
+  },
 };
 ```
 
-Puis `creerEtatJeu({ mode: modeChrono })`. Le mode **compose** les systèmes existants
-(`creerVaguesDeTrafic`, `verifierObstaclesEvites`, `detecterCollision`…) ; il ne duplique pas la
-physique.
+Ajoutez-le à `MODES` (`src/modes/modes.js`). Le mode **compose** les systèmes existants (trafic, score,
+accident…) via `reglesDePartie` (`src/modes/regles.js`) : il ne duplique pas la physique. L'ordre
+des étapes y est documenté. Pensez aussi à une issue ou une PR qui complète
+`docs/FEUILLE-DE-ROUTE.md`.
+
+### Ajouter une difficulté
+
+Ajoutez une entrée dans `DIFFICULTES` (`src/config/difficultes.js`) et un bouton radio
+`name="difficulte"` dans `index.html`. `creerReglages` en déduit les réglages de la partie ; les
+tests de `tests/unitaires/modes.test.js` pincent les valeurs actuelles.
 
 ### Ajouter un véhicule
 
@@ -217,10 +279,10 @@ documentez-le dans `src/evenements.js`.
 
 ## Tests
 
-| Niveau              | Dossier           | Ce qu'il vérifie                                                  | Vitesse |
-| ------------------- | ----------------- | ----------------------------------------------------------------- | ------- |
-| Unitaires           | `tests/unitaires` | physique, règles, météo, route, hasard, **architecture**          | ~1 s    |
-| Bout en bout        | `tests/e2e`       | chargement, responsive, clavier, swipe, nitro, partie complète    | ~20 s   |
+| Niveau       | Dossier           | Ce qu'il vérifie                                                                                                 | Vitesse |
+| ------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------- | ------- |
+| Unitaires    | `tests/unitaires` | physique, règles, météo, modes, difficultés, navigation, préférences et records, route, hasard, **architecture** | ~1 s    |
+| Bout en bout | `tests/e2e`       | accueil, saisie du nom, choix du mode, règles, partie, fin, responsive, clavier, swipe                           | ~30 s   |
 
 Le **test de caractérisation** (`jeu.test.js`) fige le comportement d'une partie de référence. Si
 vous changez volontairement le gameplay, mettez ses valeurs à jour dans la même PR et expliquez

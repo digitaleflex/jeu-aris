@@ -9,7 +9,7 @@ import { rectangleArrondi } from './primitives.js';
 
 /**
  * Interface dessinée dans le Canvas : tableaux de bord latéraux (combo,
- * adhérence, nitro), annonce de météo, écrans d'attente et de fin.
+ * adhérence, nitro), interface propre au mode, annonce de météo, compte à rebours.
  *
  * @typedef {import('./rendu.js').Rendu} Rendu
  */
@@ -89,6 +89,9 @@ export function dessinerInterfaceJeu(r, jeu) {
   ctx.fillStyle = nitro.actif ? '#5ee7ff' : clignote ? '#ffffff' : '#ff9a3c';
   const h = hauteurJauge * nitro.jauge;
   ctx.fillRect(xJauge - 7, 30 + hauteurJauge - h, 14, h);
+
+  // Interface propre au mode actif (chrono, position…) : rien pour Esquive
+  jeu.mode.dessinerInterface?.(ctx, jeu);
 }
 
 /**
@@ -135,55 +138,23 @@ export function dessinerAnnonceMeteo(r, jeu) {
 }
 
 /**
- * Compte à rebours et écrans « Prêt ? » / « Partie terminée ».
+ * Compte à rebours, dessiné sur le Canvas. Les écrans d'accueil, de choix
+ * du mode et de fin de partie sont des écrans HTML (ui/ecrans.js).
  *
  * @param {Rendu} r
  * @param {import('../etat/jeu.js').EtatJeu} jeu
  */
 export function dessinerTexteSurCanvas(r, jeu) {
+  if (jeu.phase !== PHASES.COMPTE) return;
   const { ctx } = r;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  if (jeu.phase === PHASES.COMPTE) {
-    const nombre = Math.ceil(jeu.compteARebours);
-    const progression = jeu.compteARebours - Math.floor(jeu.compteARebours);
-    ctx.font = `bold ${Math.round(60 + 40 * progression)}px Arial`;
-    ctx.fillStyle = `rgba(255, 210, 63, ${0.4 + 0.6 * progression})`;
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.lineWidth = 6;
-    ctx.strokeText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
-    ctx.fillText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
-  } else if (jeu.phase === PHASES.ATTENTE || jeu.phase === PHASES.FIN) {
-    const fini = jeu.phase === PHASES.FIN;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, HAUTEUR / 2 - 90, LARGEUR, fini ? 175 : 150);
-    ctx.fillStyle = fini ? '#ff5a5a' : '#ffd23f';
-    ctx.font = 'bold 30px Arial';
-    ctx.fillText(fini ? 'Partie terminée' : 'Prêt ?', LARGEUR / 2, HAUTEUR / 2 - 55);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '18px Arial';
-    if (fini) {
-      ctx.fillText(
-        `Score : ${jeu.score}   •   Record : ${jeu.record}`,
-        LARGEUR / 2,
-        HAUTEUR / 2 - 18,
-      );
-      ctx.font = '15px Arial';
-      ctx.fillStyle = '#ffd23f';
-      ctx.fillText(
-        `Combo max ×${jeu.multiplicateurMax}   •   Frôlements : ${jeu.nbFrolements}`,
-        LARGEUR / 2,
-        HAUTEUR / 2 + 12,
-      );
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '16px Arial';
-      ctx.fillText("Touchez l'écran ou appuyez sur Espace", LARGEUR / 2, HAUTEUR / 2 + 50);
-    } else {
-      ctx.fillText('Glissez ← → pour changer de voie', LARGEUR / 2, HAUTEUR / 2 - 18);
-      ctx.fillText('Glissez ↑ pour le NITRO', LARGEUR / 2, HAUTEUR / 2 + 8);
-      ctx.font = '16px Arial';
-      ctx.fillText("Touchez l'écran ou appuyez sur Espace", LARGEUR / 2, HAUTEUR / 2 + 40);
-    }
-  }
+  const nombre = Math.ceil(jeu.compteARebours);
+  const progression = jeu.compteARebours - Math.floor(jeu.compteARebours);
+  ctx.font = `bold ${Math.round(60 + 40 * progression)}px Arial`;
+  ctx.fillStyle = `rgba(255, 210, 63, ${0.4 + 0.6 * progression})`;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.lineWidth = 6;
+  ctx.strokeText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
+  ctx.fillText(nombre, LARGEUR / 2, HAUTEUR / 2 - 40);
 }

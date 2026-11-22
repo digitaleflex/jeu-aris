@@ -6,12 +6,12 @@ dans `src/physique/` et `src/meteo/conditions.js`.
 
 ## Échelle et temps
 
-| Grandeur     | Valeur                  | Où                              |
-| ------------ | ----------------------- | ------------------------------- |
-| Échelle      | **20 px = 1 m**         | `PX_PAR_METRE`                  |
-| Voiture      | 48 × 89 px ≈ 2,4 × 4,5 m | `GABARIT_VOITURE`               |
-| Pesanteur    | g = 9,81 m/s²           | `G`                             |
-| Pas de temps | **1/120 s**, fixe       | `PAS_PHYSIQUE`                  |
+| Grandeur     | Valeur                   | Où                |
+| ------------ | ------------------------ | ----------------- |
+| Échelle      | **20 px = 1 m**          | `PX_PAR_METRE`    |
+| Voiture      | 48 × 89 px ≈ 2,4 × 4,5 m | `GABARIT_VOITURE` |
+| Pesanteur    | g = 9,81 m/s²            | `G`               |
+| Pas de temps | **1/120 s**, fixe        | `PAS_PHYSIQUE`    |
 
 Un pas **fixe** rend la simulation indépendante de la fréquence d'affichage : à 60, 120 ou 144 Hz, la
 voiture parcourt exactement la même trajectoire (`avancerSimulation` accumule le temps réel et
@@ -29,12 +29,12 @@ Principe fondamental de la dynamique :
 m · a = F_moteur − F_traînée − F_roulement
 ```
 
-| Terme          | Formule                       | Valeurs par défaut                                   |
-| -------------- | ----------------------------- | ---------------------------------------------------- |
-| `F_traînée`    | ½ · ρ · Cx · S · v²           | ρ = 1,2 kg/m³, Cx = 0,32, S = 2,2 m² → 0,42 · v² (N) |
-| `F_roulement`  | C_rr · m · g                  | C_rr = 0,012, m = 1200 kg → 141 N                    |
-| `F_moteur`     | **min( P / v , μ · m · g )**  | P = 120 kW (≈ 163 ch)                                |
-| Freinage       | −min(0,8 · m · g, …)          | 0,8 g au maximum                                     |
+| Terme         | Formule                      | Valeurs par défaut                                   |
+| ------------- | ---------------------------- | ---------------------------------------------------- |
+| `F_traînée`   | ½ · ρ · Cx · S · v²          | ρ = 1,2 kg/m³, Cx = 0,32, S = 2,2 m² → 0,42 · v² (N) |
+| `F_roulement` | C_rr · m · g                 | C_rr = 0,012, m = 1200 kg → 141 N                    |
+| `F_moteur`    | **min( P / v , μ · m · g )** | P = 120 kW (≈ 163 ch)                                |
+| Freinage      | −min(0,8 · m · g, …)         | 0,8 g au maximum                                     |
 
 La force du moteur est limitée par **deux** plafonds, comme sur une vraie voiture :
 
@@ -113,13 +113,13 @@ moins marquées que la route est mouillée ou gelée.
 Le coefficient d'adhérence μ (`src/meteo/conditions.js`) est le **seul** paramètre qui change la
 conduite d'une météo à l'autre :
 
-| Condition                        | μ    | Vitesse visée | Crissement | Traces |
-| -------------------------------- | ---- | ------------- | ---------- | ------ |
-| Route sèche                      | 0,90 | × 1           | 100 %      | 100 %  |
-| Pluie                            | 0,55 | × 0,82        | 35 %       | 30 %   |
-| Verglas                          | 0,20 | × 0,65        | 8 %        | 5 %    |
-| Flaque (aquaplaning)             | 0,10 | —             | —          | —      |
-| Plaque de verglas                | 0,06 | —             | —          | —      |
+| Condition            | μ    | Vitesse visée | Crissement | Traces |
+| -------------------- | ---- | ------------- | ---------- | ------ |
+| Route sèche          | 0,90 | × 1           | 100 %      | 100 %  |
+| Pluie                | 0,55 | × 0,82        | 35 %       | 30 %   |
+| Verglas              | 0,20 | × 0,65        | 8 %        | 5 %    |
+| Flaque (aquaplaning) | 0,10 | —             | —          | —      |
+| Plaque de verglas    | 0,06 | —             | —          | —      |
 
 Les transitions sont **progressives** (≈ 2 s) : μ est interpolé selon l'intensité de la pluie et du
 verglas. Une flaque ou une plaque impose `min(μ météo, μ danger)` tant que les roues sont dessus.

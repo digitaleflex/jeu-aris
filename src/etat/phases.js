@@ -1,19 +1,11 @@
 import { DUREE_COMPTE_A_REBOURS } from '../config/constantes.js';
-import { PHASES, reinitialiserPartie } from './jeu.js';
-
-/**
- * Affiche un message au joueur (le HUD le lit à chaque image).
- *
- * @param {import('./jeu.js').EtatJeu} jeu
- * @param {string} texte
- */
-export function afficherMessage(jeu, texte) {
-  jeu.message.texte = texte;
-}
+import { afficherMessage, PHASES, reinitialiserPartie } from './jeu.js';
+import { ecrireRecord, lireRecord } from './preferences.js';
 
 /**
  * Prépare une nouvelle partie : remise à zéro puis compte à rebours.
- * La boucle d'animation est gérée à part (voir boucle.js).
+ * Le joueur doit avoir un nom (voir navigation.js). La boucle d'animation est
+ * gérée à part (voir boucle.js).
  *
  * @param {import('./jeu.js').EtatJeu} jeu
  */
@@ -23,8 +15,9 @@ export function preparerPartie(jeu) {
   jeu.compteARebours = DUREE_COMPTE_A_REBOURS;
   jeu.aDejaJoue = true;
   jeu.reservoirTemps = 0;
-  jeu.evenements.emettre('compteARebours', { valeur: DUREE_COMPTE_A_REBOURS });
   afficherMessage(jeu, 'Préparez-vous…');
+  jeu.evenements.emettre('navigation', { phase: jeu.phase });
+  jeu.evenements.emettre('compteARebours', { valeur: DUREE_COMPTE_A_REBOURS });
 }
 
 /**
@@ -48,18 +41,32 @@ export function mettreAJourCompteARebours(jeu, dt) {
 }
 
 /**
- * Termine la partie : enregistre le résultat (record) et prévient l'interface.
+ * Termine la partie : arrondit le score, met à jour le record du joueur dans
+ * ce mode AVANT l'affichage de l'écran de fin, puis prévient l'interface.
  *
  * @param {import('./jeu.js').EtatJeu} jeu
  */
 export function terminerPartie(jeu) {
   jeu.phase = PHASES.FIN;
-  const { nouveauRecord } = jeu.mode.enregistrerResultat(jeu);
-  afficherMessage(
-    jeu,
-    nouveauRecord
-      ? `Partie terminée — nouveau record : ${jeu.score} !`
-      : `Partie terminée — score : ${jeu.score}. Appuyez sur Recommencer.`,
-  );
-  jeu.evenements.emettre('fin', { score: jeu.score, record: jeu.record, nouveauRecord });
+  jeu.score = Math.round(jeu.score);
+
+  const ancienRecord = lireRecord(jeu.mode.id, jeu.nomJoueur);
+  const nouveauRecord = jeu.score > ancienRecord;
+  jeu.ancienRecord = ancienRecord;
+  if (nouveauRecord) {
+    jeu.record = jeu.score;
+    ecrireRecord(jeu.mode.id, jeu.nomJoueur, jeu.record);
+    afficherMessage(jeu, `Partie terminée — nouveau record : ${jeu.score} !`);
+  } else {
+    jeu.record = ancienRecord;
+    afficherMessage(jeu, `Partie terminée — score : ${jeu.score}.`);
+  }
+
+  jeu.evenements.emettre('fin', {
+    score: jeu.score,
+    record: jeu.record,
+    ancienRecord,
+    nouveauRecord,
+  });
+  jeu.evenements.emettre('navigation', { phase: jeu.phase });
 }

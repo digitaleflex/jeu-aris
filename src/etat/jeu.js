@@ -1,21 +1,29 @@
 import { JOUEUR_Y } from '../config/constantes.js';
-import { REGLAGES_PAR_DEFAUT } from '../config/reglages.js';
+import { DIFFICULTE_PAR_DEFAUT } from '../config/difficultes.js';
+import { creerReglages } from '../config/reglages.js';
 import { DISTANCE_PREMIERE_METEO_M } from '../config/meteo.js';
 import { VEHICULE_PAR_DEFAUT } from '../config/vehicules.js';
+import { MODES, MODE_PAR_DEFAUT } from '../modes/modes.js';
 import { ROUTE_STANDARD } from '../route/route.js';
 import { creerEmetteur } from '../evenements.js';
 import { aleaParDefaut } from '../utilitaires/alea.js';
 import { kmhVersPx } from '../utilitaires/maths.js';
 
 /**
- * États successifs d'une partie.
+ * Phases successives du jeu.
  *
- *   attente ─► compte ─► jeu ─► accident ─► fini ─┐
- *      ▲         ▲                                │
- *      └─────────┴──────────── nouvelle partie ◄──┘
+ *   accueil ─► choixMode ─► compte ─► jeu ─► accident ─► fini
+ *      ▲           ▲          ▲                           │
+ *      │           │          └───────── rejouer ◄────────┤
+ *      │           └────────── changer de mode ◄──────────┤
+ *      └────────────────────── changer de joueur ◄────────┘
+ *
+ * Les règles d'un mode (« règles du mode ») s'affichent par-dessus
+ * `choixMode` : ce n'est pas une phase, voir `EtatJeu.reglesMode`.
  */
 export const PHASES = Object.freeze({
-  ATTENTE: 'attente',
+  ACCUEIL: 'accueil',
+  CHOIX_MODE: 'choixMode',
   COMPTE: 'compte',
   JEU: 'jeu',
   ACCIDENT: 'accident',
@@ -68,13 +76,18 @@ export const PHASES = Object.freeze({
  *
  * @typedef {object} EtatJeu
  * @property {Readonly<import('../route/route.js').Route>} route
- * @property {import('../modes/esquive.js').Mode} mode
+ * @property {import('../modes/modes.js').Mode} mode
  * @property {() => number} alea                 Hasard de la partie, voir utilitaires/alea.js.
  * @property {import('../evenements.js').Emetteur} evenements
  * @property {import('../config/reglages.js').Reglages} reglages
+ * @property {string} difficulteId               `facile`, `normal` ou `difficile`.
  * @property {string} phase                      Une valeur de PHASES.
- * @property {number} score
- * @property {number} record
+ * @property {string} nomJoueur                  Nom validé (vide tant que l'accueil n'est pas franchi).
+ * @property {string|null} reglesMode            Identifiant du mode dont on lit les règles, ou null.
+ * @property {number} score                      Peut être fractionnaire (multiplicateur de difficulté).
+ * @property {number} record                     Record du joueur dans le mode courant.
+ * @property {number} ancienRecord               Record avant la dernière partie (écran de fin).
+ * @property {object|null} finMode               Résultat renvoyé par `mode.verifierFin`, si le mode a terminé la partie.
  * @property {boolean} aDejaJoue
  * @property {{texte: string|null, perdu: boolean}} message
  * @property {number} voituresEvitees
@@ -99,6 +112,16 @@ export const PHASES = Object.freeze({
  * @property {object[]} dangers                  Flaques et plaques de verglas.
  * @property {object[]} textesFlottants
  */
+
+/**
+ * Affiche un message au joueur (le HUD le lit à chaque image).
+ *
+ * @param {EtatJeu} jeu
+ * @param {string} texte
+ */
+export function afficherMessage(jeu, texte) {
+  jeu.message.texte = texte;
+}
 
 /**
  * Crée la voiture du joueur, centrée sur la voie du milieu.
@@ -135,16 +158,18 @@ export function creerVoitureJoueur(modele, route) {
  * @param {object} [options]
  * @param {Readonly<import('../route/route.js').Route>} [options.route]
  * @param {import('../config/vehicules.js').ModeleVehicule} [options.vehicule]
- * @param {import('../modes/esquive.js').Mode} [options.mode]
+ * @param {import('../modes/modes.js').Mode} [options.mode]
  * @param {() => number} [options.alea]
- * @param {Partial<import('../config/reglages.js').Reglages>} [options.reglages]
+ * @param {string} [options.difficulte]  Identifiant de difficulté.
+ * @param {Partial<import('../config/reglages.js').Reglages>} [options.reglages]  Surcharges ponctuelles.
  * @returns {EtatJeu}
  */
 export function creerEtatJeu({
   route = ROUTE_STANDARD,
   vehicule = VEHICULE_PAR_DEFAUT,
-  mode,
+  mode = MODES[MODE_PAR_DEFAUT],
   alea = aleaParDefaut,
+  difficulte = DIFFICULTE_PAR_DEFAUT,
   reglages = {},
 } = {}) {
   /** @type {EtatJeu} */
@@ -153,10 +178,15 @@ export function creerEtatJeu({
     mode,
     alea,
     evenements: creerEmetteur(),
-    reglages: { ...REGLAGES_PAR_DEFAUT, ...reglages },
-    phase: PHASES.ATTENTE,
+    reglages: { ...creerReglages(difficulte), ...reglages },
+    difficulteId: difficulte,
+    phase: PHASES.ACCUEIL,
+    nomJoueur: '',
+    reglesMode: null,
     score: 0,
-    record: mode?.chargerRecord?.() ?? 0,
+    record: 0,
+    ancienRecord: 0,
+    finMode: null,
     aDejaJoue: false,
     message: { texte: null, perdu: false },
     voituresEvitees: 0,
@@ -202,6 +232,8 @@ export function reinitialiserPartie(jeu) {
   const { joueur, nitro, meteo, route } = jeu;
 
   jeu.score = 0;
+  jeu.finMode = null;
+  jeu.defilement = 0;
   joueur.voie = Math.floor(route.nbVoies / 2);
   joueur.x = route.centreVoie(joueur.voie);
   joueur.y = JOUEUR_Y;
@@ -242,6 +274,6 @@ export function reinitialiserPartie(jeu) {
   jeu.animationCombo = 0;
   jeu.message.perdu = false;
 
-  jeu.mode?.preparer?.(jeu);
+  jeu.mode.preparer?.(jeu);
   jeu.evenements.emettre('nouvellePartie');
 }

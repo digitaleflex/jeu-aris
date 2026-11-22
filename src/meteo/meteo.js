@@ -1,7 +1,6 @@
 import { PX_PAR_METRE } from '../config/constantes.js';
 import { DISTANCE_ENTRE_METEOS_M, DUREE_ANNONCE_METEO, METEOS } from '../config/meteo.js';
-import { PHASES } from '../etat/jeu.js';
-import { afficherMessage } from '../etat/phases.js';
+import { afficherMessage, PHASES } from '../etat/jeu.js';
 import { limiter } from '../utilitaires/maths.js';
 import { creerDangers, deplacerDangers, verifierDangersSousRoues } from './dangers.js';
 import { creerEffetsMeteo } from './effets.js';
@@ -44,7 +43,8 @@ export function mettreAJourMeteo(jeu, dt) {
 }
 
 /**
- * Après le sec : pluie (60 %) ou verglas (40 %).
+ * Après le sec : pluie ou verglas, selon la probabilité de verglas de la
+ * difficulté (et seulement si le mode a de la météo).
  * Après la pluie ou le verglas : retour au sec.
  *
  * @param {import('../etat/jeu.js').EtatJeu} jeu
@@ -52,7 +52,9 @@ export function mettreAJourMeteo(jeu, dt) {
 export function changerMeteo(jeu) {
   const { meteo, alea } = jeu;
   let suivante = 'sec';
-  if (meteo.actuelle === 'sec') suivante = alea() < 0.6 ? 'pluie' : 'verglas';
+  if (meteo.actuelle === 'sec' && jeu.mode.meteo) {
+    suivante = alea() < jeu.reglages.probabiliteVerglas ? 'verglas' : 'pluie';
+  }
   meteo.actuelle = suivante;
   meteo.distanceRestante = DISTANCE_ENTRE_METEOS_M * (0.8 + alea() * 0.4);
   meteo.annonce = DUREE_ANNONCE_METEO;

@@ -22,8 +22,11 @@ import { ajouterTexteFlottant, creerEtincelles } from './particules.js';
  * @param {number} y
  */
 export function ajouterPoints(jeu, points, x, y) {
-  jeu.score += points;
-  ajouterTexteFlottant(jeu, `+${points}`, x, y, '#ffffff', 20);
+  // Le score reste fractionnaire en interne : le multiplicateur de difficulté
+  // (0,8 / 1 / 1,3) s'applique sans arrondi cumulatif. Il est arrondi en fin de partie.
+  const gagnes = points * jeu.reglages.multiplicateurScore;
+  jeu.score += gagnes;
+  ajouterTexteFlottant(jeu, `+${Math.round(gagnes)}`, x, y, '#ffffff', 20);
 }
 
 /**

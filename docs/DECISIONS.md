@@ -12,6 +12,7 @@ interface. Trop long à lire, impossible à tester sans navigateur.
 transpilation. Le code servi est le code écrit.
 
 **Conséquences.**
+
 - ✅ Aucune étape de build, aucune dépendance d'exécution, débogage direct dans le navigateur.
 - ⚠️ Le jeu ne s'ouvre plus en double-cliquant sur `index.html` (`file://` bloque les modules) : il
   faut un serveur HTTP (`npm start`). `index.html` affiche un message d'aide dans ce cas.
@@ -27,7 +28,7 @@ transpilation. Le code servi est le code écrit.
 **Décision.** Séparer le **cœur** (état, physique, règles, simulation) de la **périphérie** (rendu,
 audio, HUD, entrées). Le cœur ne référence ni `document`, ni `window`, ni Web Audio.
 
-**Conséquences.** 100 tests unitaires s'exécutent sous Node en ≈ 1 s. La règle est **vérifiée par un
+**Conséquences.** Plus de 150 tests unitaires s'exécutent sous Node en ≈ 1 s. La règle est **vérifiée par un
 test** (`architecture.test.js`) : un import ou une API de navigateur dans le cœur fait échouer la CI.
 
 ## 3. Événements plutôt qu'appels directs vers le son et l'interface
@@ -89,3 +90,37 @@ strictement identiques sur plusieurs graines (pluie, verglas, nuit, accident, re
 dans le code : le seuil d'apparition des dangers est retiré à chaque pas (`meteo/dangers.js`), et la
 dynamique latérale n'est pas en unités réelles (`docs/PHYSIQUE.md`). Les corriger est un changement de
 gameplay : il se fait dans une PR dédiée.
+
+## 8. Écrans HTML pilotés par l'état
+
+**Contexte.** La version « écrans » du jeu (accueil, choix du mode, règles, fin) gérait la navigation
+en affichant et cachant des sections du DOM depuis le même fichier que la physique.
+
+**Décision.** La navigation est de l'état (`jeu.phase`, `jeu.reglesMode`, `jeu.nomJoueur`) modifié par
+`etat/navigation.js`, sans DOM. `ui/ecrans.js` ne fait qu'afficher l'état et transmettre les actions du
+joueur. Même principe que le HUD.
+
+**Conséquences.** Toute la navigation (validation du nom, noms récents, migration du record,
+règles, « ne plus afficher », difficulté) est testée sous Node. Contrepartie : un événement
+`navigation` relie les deux côtés, car en menu aucune boucle d'animation ne rafraîchit l'interface.
+
+## 9. Un mode est avant tout des données
+
+**Contexte.** Le tableau `MODES` de la version « écrans » décrivait les cinq modes (nom, règles, trafic,
+collision fatale, distance cible…) et prévoyait quatre fonctions « crochets » globales.
+
+**Décision.** Un mode est un objet `{ données…, crochets facultatifs }` ; les crochets (`preparer`,
+`mettreAJour`, `verifierFin`, `dessinerInterface`) deviennent des propriétés du mode, et
+`reglesDePartie` applique les règles standard en lisant ses données. Les modes à venir sont déjà
+déclarés (`disponible: false`) pour que l'écran de choix les affiche.
+
+**Conséquences.** Activer un mode ne demande pas de modifier le moteur. Un mode qui aurait besoin
+d'un déroulement radicalement différent devra étendre `reglesDePartie`, ce qui reste à valider avec
+le premier mode réel (Course).
+
+## Écarts connus avec la version précédente
+
+La refonte conserve le comportement de la version précédente, à une exception près, purement visuelle :
+le bouton nitro cesse de pulser « prêt » dès l'activation du nitro (l'ancien code ne mettait cette
+classe à jour que lorsque la charge **affichée** changeait, ce qui laissait le bouton pulser une à
+deux images de trop).

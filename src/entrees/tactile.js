@@ -3,8 +3,10 @@
  *   - glisser le doigt vers la gauche / la droite : change de voie dès que le
  *     doigt a parcouru SEUIL_SWIPE pixels (un long swipe enchaîne plusieurs voies) ;
  *   - glisser vers le haut : nitro ;
- *   - toucher brièvement le Canvas : moitié gauche → gauche, moitié droite → droite ;
- *   - avant / après une partie, un toucher lance la partie.
+ *   - toucher brièvement le Canvas : moitié gauche → gauche, moitié droite → droite.
+ *
+ * Les écrans HTML gèrent leurs propres touchers : un toucher sur un écran ne
+ * déclenche jamais un geste de jeu.
  */
 
 /** Pixels parcourus pour valider un swipe. */
@@ -17,6 +19,8 @@ const DUREE_TOUCHER = 350;
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {import('./commandes.js').Commandes} commandes
+ * @returns {{reinitialiser: () => void}} `reinitialiser` abandonne le geste en cours
+ *   (à appeler quand une nouvelle partie démarre).
  */
 export function brancherTactile(canvas, commandes) {
   /** @type {null|{id: number, departX: number, departY: number, referenceX: number, debut: number, aGlisse: boolean, surCanvas: boolean, nitroFait: boolean}} */
@@ -25,6 +29,7 @@ export function brancherTactile(canvas, commandes) {
   document.addEventListener(
     'pointerdown',
     (evenement) => {
+      if (evenement.target.closest('#ecrans')) return; // les écrans gèrent leurs touchers
       if (evenement.target.closest('button')) return; // les boutons gardent leur rôle
       if (geste !== null) return; // un seul doigt suivi à la fois
       evenement.preventDefault();
@@ -76,14 +81,11 @@ export function brancherTactile(canvas, commandes) {
     const duree = performance.now() - geste.debut;
     const simpleToucher = !geste.aGlisse && distance < SEUIL_TOUCHER && duree < DUREE_TOUCHER;
 
-    if (simpleToucher) {
-      if (commandes.peutDemarrer()) {
-        commandes.demarrer();
-      } else if (geste.surCanvas) {
-        const rect = canvas.getBoundingClientRect();
-        if (evenement.clientX - rect.left < rect.width / 2) commandes.gauche();
-        else commandes.droite();
-      }
+    // Hors partie, gauche() et droite() sont sans effet : pas besoin de tester la phase
+    if (simpleToucher && geste.surCanvas) {
+      const rect = canvas.getBoundingClientRect();
+      if (evenement.clientX - rect.left < rect.width / 2) commandes.gauche();
+      else commandes.droite();
     }
     geste = null;
   });
@@ -94,4 +96,10 @@ export function brancherTactile(canvas, commandes) {
 
   // Empêche le menu « appui long » sur l'image du Canvas
   canvas.addEventListener('contextmenu', (evenement) => evenement.preventDefault());
+
+  return {
+    reinitialiser() {
+      geste = null;
+    },
+  };
 }

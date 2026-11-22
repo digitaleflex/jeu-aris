@@ -24,7 +24,8 @@
  * | meteo             | { type }                             | changement de temps                     |
  * | danger            | { type }                             | roues sur une flaque ou une plaque      |
  * | vibration         | { motif }                            | demande de vibration (téléphone)        |
- * | fin               | { score, record, nouveauRecord }     | fin de partie                           |
+ * | navigation        | { phase, reglesMode? }               | l'écran à afficher a changé             |
+ * | fin               | { score, record, ancienRecord, nouveauRecord } | fin de partie                 |
  */
 
 /**

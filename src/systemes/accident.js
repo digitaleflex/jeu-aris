@@ -1,7 +1,7 @@
 import { DUREE_ACCIDENT_MAX } from '../config/constantes.js';
 import { RALENTI_ACCIDENT } from '../config/gameplay.js';
-import { PHASES } from '../etat/jeu.js';
-import { afficherMessage, terminerPartie } from '../etat/phases.js';
+import { afficherMessage, PHASES } from '../etat/jeu.js';
+import { terminerPartie } from '../etat/phases.js';
 import { rectangle, seChevauchent } from '../physique/collisions.js';
 import { lisserGlisse, laisserTraces } from '../physique/direction.js';
 import { ralentirParFrottement } from '../physique/frottement.js';

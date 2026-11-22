@@ -21,6 +21,6 @@ export function brancherBoutons(boutons, commandes) {
   relier(boutons.gauche, commandes.gauche);
   relier(boutons.droite, commandes.droite);
   relier(boutons.nitro, commandes.nitro);
-  relier(boutons.recommencer, commandes.demarrer);
+  relier(boutons.recommencer, commandes.boutonPrincipal);
   relier(boutons.son, commandes.basculerSon);
 }

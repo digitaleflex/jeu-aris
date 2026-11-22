@@ -1,4 +1,5 @@
 import { PHASES } from './etat/jeu.js';
+import { allerAccueil } from './etat/navigation.js';
 import { preparerPartie } from './etat/phases.js';
 import { avancerSimulation } from './simulation.js';
 
@@ -45,8 +46,15 @@ export function creerBoucle({ jeu, rendu, hud, sons }) {
      */
     etape,
 
-    /** Lance (ou relance) une partie : compte à rebours puis jeu. */
+    /**
+     * Lance (ou relance) une partie : compte à rebours puis jeu.
+     * Sans nom de joueur, on revient à l'accueil.
+     */
     demarrer() {
+      if (!jeu.nomJoueur) {
+        allerAccueil(jeu);
+        return;
+      }
       sons.initialiser();
 
       // Une seule boucle à la fois : on annule l'éventuelle boucle précédente

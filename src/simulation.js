@@ -2,6 +2,7 @@ import { PAS_PHYSIQUE } from './config/constantes.js';
 import { FROLEMENT } from './config/gameplay.js';
 import { PHASES } from './etat/jeu.js';
 import { mettreAJourCompteARebours } from './etat/phases.js';
+import { reglesDePartie } from './modes/regles.js';
 import { mettreAJourMeteo } from './meteo/meteo.js';
 import { mettreAJourDirection, purgerTraces } from './physique/direction.js';
 import { mettreAJourMoteur } from './physique/moteur.js';
@@ -17,7 +18,7 @@ import { deplacerObstacles } from './systemes/trafic.js';
  *   1. physique du joueur (moteur, direction) ou de l'accident ;
  *   2. défilement de la route et déplacement du trafic ;
  *   3. systèmes communs (nitro, météo, particules, textes) ;
- *   4. règles propres à la phase : compte à rebours, ou règles du mode.
+ *   4. règles propres à la phase : compte à rebours, ou règles du mode (voir modes/regles.js).
  *
  * Cette fonction ne touche ni au DOM, ni au son : elle peut tourner hors
  * navigateur (tests).
@@ -46,7 +47,7 @@ export function mettreAJour(jeu, dt) {
   if (jeu.phase === PHASES.COMPTE) {
     mettreAJourCompteARebours(jeu, dt);
   } else if (jeu.phase === PHASES.JEU) {
-    jeu.mode.mettreAJourPartie(jeu, dt);
+    reglesDePartie(jeu, dt);
   }
 }
 

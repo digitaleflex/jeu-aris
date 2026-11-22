@@ -35,7 +35,9 @@ export function creerVaguesDeTrafic(jeu, dt) {
   // Écart entre deux vagues : au moins ≈ 0,85 s pour pouvoir changer de voie.
   // Sur route glissante, on laisse plus de temps.
   const tempsReaction = 0.85 + 0.7 * (1 - adherence(jeu.meteo) / ADHERENCE_SECHE);
-  const ecart = GABARIT_VOITURE.hauteur + Math.max(160, vRel * tempsReaction);
+  // La densité de la difficulté resserre (ou desserre) les vagues.
+  const ecart =
+    (GABARIT_VOITURE.hauteur + Math.max(160, vRel * tempsReaction)) / jeu.reglages.densiteTrafic;
   if (jeu.distanceDepuisVague >= ecart) {
     jeu.distanceDepuisVague = 0;
     creerVague(jeu);

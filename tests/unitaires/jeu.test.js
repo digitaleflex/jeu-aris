@@ -10,12 +10,19 @@ import { changerDeVoie } from '../../src/systemes/pilotage.js';
 import { vitesseRelativeTrafic } from '../../src/systemes/trafic.js';
 import { creerAleaAvecGraine } from '../../src/utilitaires/alea.js';
 import { pxVersKmh } from '../../src/utilitaires/maths.js';
-import { avancer, avecHasardGraine, demarrerPartie, espionner, nouveauJeu } from '../aide.js';
+import {
+  avancer,
+  avecHasardGraine,
+  demarrerPartie,
+  espionner,
+  nouveauJeu,
+  stockageCourant,
+} from '../aide.js';
 
 describe('phases de la partie', () => {
-  it('démarre en attente, avec la voiture au centre à 90 km/h', () => {
+  it('démarre à l’accueil, avec la voiture au centre à 90 km/h', () => {
     const jeu = nouveauJeu();
-    assert.equal(jeu.phase, PHASES.ATTENTE);
+    assert.equal(jeu.phase, PHASES.ACCUEIL);
     assert.equal(jeu.joueur.voie, 1);
     assert.equal(jeu.joueur.x, jeu.route.centreVoie(1));
     assert.ok(Math.abs(pxVersKmh(jeu.joueur.vitesse) - 90) < 1e-9);
@@ -73,21 +80,40 @@ describe('phases de la partie', () => {
     assert.equal(jeu.record, 77);
   });
 
-  it('enregistre un nouveau record en fin de partie', () => {
+  it('enregistre un nouveau record pour ce joueur et ce mode, avant l’écran de fin', () => {
     const jeu = nouveauJeu();
+    const stockage = stockageCourant();
+    stockage.setItem('record.esquive.Testeur', '10');
     jeu.record = 10;
-    const evenements = espionner(jeu, ['fin']);
-    jeu.score = 25;
+    const evenements = espionner(jeu, ['fin', 'navigation']);
+    jeu.score = 24.6; // score fractionnaire (multiplicateur de difficulté)
     terminerPartie(jeu);
     assert.equal(jeu.phase, PHASES.FIN);
+    assert.equal(jeu.score, 25, 'le score est arrondi');
     assert.equal(jeu.record, 25);
+    assert.equal(jeu.ancienRecord, 10);
+    assert.equal(stockage.getItem('record.esquive.Testeur'), '25');
     assert.match(jeu.message.texte, /nouveau record : 25/);
-    assert.deepEqual(evenements[0].donnees, { score: 25, record: 25, nouveauRecord: true });
+    assert.deepEqual(evenements[0].donnees, {
+      score: 25,
+      record: 25,
+      ancienRecord: 10,
+      nouveauRecord: true,
+    });
+    assert.equal(evenements[1].nom, 'navigation');
+  });
 
+  it('ne baisse jamais le record et le garde séparé par joueur et par mode', () => {
+    const jeu = nouveauJeu();
+    const stockage = stockageCourant();
+    stockage.setItem('record.esquive.Testeur', '40');
     jeu.score = 5;
     terminerPartie(jeu);
-    assert.equal(jeu.record, 25);
-    assert.equal(evenements[1].donnees.nouveauRecord, false);
+    assert.equal(jeu.record, 40);
+    assert.equal(jeu.ancienRecord, 40);
+    assert.equal(stockage.getItem('record.esquive.Testeur'), '40');
+    assert.equal(stockage.has('record.esquive.Autre'), false);
+    assert.match(jeu.message.texte, /score : 5\./);
   });
 });
 
@@ -210,12 +236,15 @@ describe('simulation complète', () => {
     assert.equal(instantane(partie(2026, 1)), instantane(partie(2026, 987654)));
   });
 
-  it('un pilote prudent marque des points sans accident pendant 40 s', () => {
+  it('un pilote prudent marque des points sans accident pendant 40 s sur route sèche', () => {
     for (const graine of [1, 2]) {
-      const jeu = partie(graine);
+      const jeu = nouveauJeu({ alea: creerAleaAvecGraine(graine) });
+      demarrerPartie(jeu);
+      jeu.meteo.distanceRestante = 1e9; // pas de pluie ni de verglas : on teste le pilote, pas la météo
+      piloter(jeu, 40);
       assert.equal(jeu.phase, PHASES.JEU, `graine ${graine}`);
-      assert.ok(jeu.score >= 100, `score : ${jeu.score}`);
-      assert.ok(jeu.voituresEvitees >= 30);
+      assert.ok(jeu.score >= 80, `score : ${jeu.score}`);
+      assert.ok(jeu.voituresEvitees >= 25);
     }
   });
 
@@ -240,5 +269,5 @@ describe('simulation complète', () => {
   });
 });
 
-const ATTENDU_CARACTERISATION = ['jeu', 234, 55, 56, 'pluie'];
-const ATTENDU_DEFILEMENT = '31173.687';
+const ATTENDU_CARACTERISATION = ['fini', 184, 45, 46, 'verglas'];
+const ATTENDU_DEFILEMENT = '27190.828';

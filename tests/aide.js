@@ -4,16 +4,37 @@
 import { PAS_PHYSIQUE } from '../src/config/constantes.js';
 import { creerEtatJeu, PHASES } from '../src/etat/jeu.js';
 import { preparerPartie } from '../src/etat/phases.js';
-import { modeEsquive } from '../src/modes/esquive.js';
+import { MODES } from '../src/modes/modes.js';
 import { mettreAJour } from '../src/simulation.js';
 import { creerAleaAvecGraine } from '../src/utilitaires/alea.js';
+import { creerStockageMemoire, definirStockage } from '../src/utilitaires/stockage.js';
 
 /**
- * État de jeu avec un hasard à graine : deux appels avec la même graine
- * produisent exactement la même partie.
+ * Stockage en mémoire neuf : chaque test part d'un stockage vide, sans jamais
+ * toucher au vrai localStorage. Renvoie le stockage pour l'inspecter.
+ */
+let stockageActuel = null;
+export function stockageVierge() {
+  stockageActuel = creerStockageMemoire();
+  definirStockage(stockageActuel);
+  return stockageActuel;
+}
+
+/** Stockage en mémoire utilisé par le dernier `nouveauJeu()` / `stockageVierge()`. */
+export function stockageCourant() {
+  return stockageActuel;
+}
+
+/**
+ * État de jeu avec un hasard à graine (deux appels avec la même graine
+ * produisent exactement la même partie), un stockage vide et un joueur
+ * nommé « Testeur » : on peut lancer une partie tout de suite.
  */
 export function nouveauJeu(options = {}) {
-  return creerEtatJeu({ mode: modeEsquive, alea: creerAleaAvecGraine(42), ...options });
+  stockageVierge();
+  const jeu = creerEtatJeu({ mode: MODES.esquive, alea: creerAleaAvecGraine(42), ...options });
+  jeu.nomJoueur = 'Testeur';
+  return jeu;
 }
 
 /** Fait avancer la simulation d'un nombre de secondes de jeu (pas fixes). */

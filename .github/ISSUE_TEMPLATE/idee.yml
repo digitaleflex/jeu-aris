@@ -1,0 +1,38 @@
+name: 💡 Idée ou fonctionnalité
+description: Proposer une amélioration ou une nouveauté
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: idee
+    attributes:
+      label: L'idée
+      description: Que voudriez-vous voir dans le jeu ?
+    validations:
+      required: true
+  - type: textarea
+    id: pourquoi
+    attributes:
+      label: Pourquoi
+      description: Quel problème cela résout-il, ou quelle sensation cela apporte-t-il ?
+    validations:
+      required: true
+  - type: textarea
+    id: reel
+    attributes:
+      label: Dans la vraie vie (facultatif)
+      description: 'Pour une idée physique ou météo : que se passe-t-il vraiment ? Valeurs, formules, références.'
+  - type: textarea
+    id: criteres
+    attributes:
+      label: Critères d'acceptation
+      description: Comment saura-t-on que c'est terminé ?
+      placeholder: |
+        - [ ] …
+        - [ ] …
+  - type: checkboxes
+    id: doublon
+    attributes:
+      label: Vérifications
+      options:
+        - label: J'ai cherché dans les issues existantes et la [feuille de route](../blob/main/docs/FEUILLE-DE-ROUTE.md).
+          required: true

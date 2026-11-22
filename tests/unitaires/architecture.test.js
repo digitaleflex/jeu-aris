@@ -43,7 +43,11 @@ const AUTORISE = {
 function fichiersJs(dossier) {
   return readdirSync(dossier).flatMap((nom) => {
     const chemin = join(dossier, nom);
-    return statSync(chemin).isDirectory() ? fichiersJs(chemin) : chemin.endsWith('.js') ? [chemin] : [];
+    return statSync(chemin).isDirectory()
+      ? fichiersJs(chemin)
+      : chemin.endsWith('.js')
+        ? [chemin]
+        : [];
   });
 }
 
@@ -64,7 +68,9 @@ describe('architecture', () => {
 
   it('respecte le sens des dépendances : base ← cœur ← périphérie ← assemblage', () => {
     for (const f of fichiers) {
-      const imports = [...sansCommentaires(readFileSync(f, 'utf8')).matchAll(/from\s+'(\.[^']+)'/g)];
+      const imports = [
+        ...sansCommentaires(readFileSync(f, 'utf8')).matchAll(/from\s+'(\.[^']+)'/g),
+      ];
       for (const [, relatif] of imports) {
         const cible = resolve(dirname(f), relatif);
         assert.ok(
@@ -88,7 +94,9 @@ describe('architecture', () => {
     const visiter = (f) => {
       if (etat.get(f) === 2) return;
       if (etat.get(f) === 1) {
-        throw new Error(`cycle : ${[...pile.slice(pile.indexOf(f)), f].map((p) => relative(SRC, p)).join(' → ')}`);
+        throw new Error(
+          `cycle : ${[...pile.slice(pile.indexOf(f)), f].map((p) => relative(SRC, p)).join(' → ')}`,
+        );
       }
       etat.set(f, 1);
       pile.push(f);
@@ -100,7 +108,8 @@ describe('architecture', () => {
   });
 
   it('garde le cœur du jeu indépendant du navigateur (pas de DOM, de son ni d’animation)', () => {
-    const interdits = /\b(document|window|navigator|requestAnimationFrame|AudioContext|HTMLElement|Image)\b/;
+    const interdits =
+      /\b(document|window|navigator|requestAnimationFrame|AudioContext|HTMLElement|Image)\b/;
     for (const f of fichiers.filter((p) => ['base', 'coeur'].includes(couche(p)))) {
       const code = sansCommentaires(readFileSync(f, 'utf8'));
       assert.doesNotMatch(code, interdits, `${relative(SRC, f)} utilise une API du navigateur`);
@@ -120,7 +129,10 @@ describe('architecture', () => {
     for (const f of fichiers.filter((p) => ['coeur', 'base'].includes(couche(p)))) {
       const nom = relative(SRC, f).split(sep).join('/');
       if (/Math\.random/.test(sansCommentaires(readFileSync(f, 'utf8')))) {
-        assert.ok(attendus.includes(nom), `${nom} : le hasard du gameplay doit passer par jeu.alea`);
+        assert.ok(
+          attendus.includes(nom),
+          `${nom} : le hasard du gameplay doit passer par jeu.alea`,
+        );
       }
     }
   });

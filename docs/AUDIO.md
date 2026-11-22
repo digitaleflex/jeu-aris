@@ -5,12 +5,12 @@ audio. Le code est dans `src/audio/`.
 
 ## Organisation
 
-| Fichier             | Contenu                                                                       |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `contexte.js`       | Contexte audio partagé, bruit blanc, primitives `jouerBip` et `jouerBruit`.   |
-| `sonsContinus.js`   | Sons qui durent : moteur, crissement de pneus, vent, pluie.                    |
-| `effets.js`         | Sons ponctuels, un par événement du jeu (dépassement, nitro, accident…).       |
-| `audio.js`          | `initialiserSon`, `basculerSon`, `mettreAJourSons`, `brancherAudio`.          |
+| Fichier           | Contenu                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| `contexte.js`     | Contexte audio partagé, bruit blanc, primitives `jouerBip` et `jouerBruit`. |
+| `sonsContinus.js` | Sons qui durent : moteur, crissement de pneus, vent, pluie.                 |
+| `effets.js`       | Sons ponctuels, un par événement du jeu (dépassement, nitro, accident…).    |
+| `audio.js`        | `initialiserSon`, `basculerSon`, `mettreAJourSons`, `brancherAudio`.        |
 
 Le navigateur n'autorise le son qu'après une action de l'utilisateur : le contexte est créé au
 premier appui sur « Démarrer » (ou au premier toucher). Le son est mis en pause quand l'onglet est
@@ -29,7 +29,7 @@ Deux oscillateurs (dent de scie et carré une octave plus bas) passent dans un f
 
 ### Crissement de pneus
 
-Un pneu qui dérape **accroche et décroche des centaines de fois par seconde** (*stick-slip*) : cela
+Un pneu qui dérape **accroche et décroche des centaines de fois par seconde** (_stick-slip_) : cela
 produit un sifflement presque musical, qui tremble. On le reproduit avec :
 
 1. un bruit blanc passé dans trois filtres très sélectifs (une note et ses deux harmoniques) ;
@@ -51,19 +51,19 @@ mouillé, presque aucun sur la glace).
 
 ## Effets
 
-| Événement          | Son                                                                |
-| ------------------ | ------------------------------------------------------------------ |
-| `compteARebours`   | bip carré                                                          |
-| `depart`           | bip long et aigu                                                   |
-| `changementVoie`   | petit souffle                                                      |
-| `depassement`      | souffle descendant (clin d'œil à l'effet Doppler) et « ding »      |
-| `frolement`        | souffle aigu très proche et deux notes                             |
-| `combo`            | arpège d'autant plus aigu que le multiplicateur est grand          |
-| `nitroActive`      | souffle montant et grondement grave                                |
-| `accident`         | choc sourd, fracas de tôle, bris de verre                          |
-| `meteo`            | tonnerre (pluie), tintements de givre (verglas), notes (retour au sec) |
-| `danger`           | splash (flaque) ou craquement de glace (plaque)                    |
-| `fin`              | mélodie montante si nouveau record                                 |
+| Événement        | Son                                                                    |
+| ---------------- | ---------------------------------------------------------------------- |
+| `compteARebours` | bip carré                                                              |
+| `depart`         | bip long et aigu                                                       |
+| `changementVoie` | petit souffle                                                          |
+| `depassement`    | souffle descendant (clin d'œil à l'effet Doppler) et « ding »          |
+| `frolement`      | souffle aigu très proche et deux notes                                 |
+| `combo`          | arpège d'autant plus aigu que le multiplicateur est grand              |
+| `nitroActive`    | souffle montant et grondement grave                                    |
+| `accident`       | choc sourd, fracas de tôle, bris de verre                              |
+| `meteo`          | tonnerre (pluie), tintements de givre (verglas), notes (retour au sec) |
+| `danger`         | splash (flaque) ou craquement de glace (plaque)                        |
+| `fin`            | mélodie montante si nouveau record                                     |
 
 ## Ajouter un son
 

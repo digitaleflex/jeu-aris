@@ -34,9 +34,11 @@ export function creerHud(elements) {
   return {
     /** @param {import('../etat/jeu.js').EtatJeu} jeu */
     rafraichir(jeu) {
-      if (jeu.score !== affiche.score) {
-        affiche.score = jeu.score;
-        elements.score.textContent = String(jeu.score);
+      // Le score peut être fractionnaire (multiplicateur de difficulté) : on affiche l'entier le plus proche
+      const score = Math.round(jeu.score);
+      if (score !== affiche.score) {
+        affiche.score = score;
+        elements.score.textContent = String(score);
       }
       if (jeu.record !== affiche.record) {
         affiche.record = jeu.record;

@@ -32,6 +32,7 @@ body {
 }
 
 .jeu {
+  position: relative;
   width: 100%;
   max-width: 480px;
   height: 100%;
@@ -345,4 +346,669 @@ button {
 
 .erreur-chargement code {
   color: #ffffff;
+}
+
+/* =========================================================
+   Écrans de jeu (overlay HTML par-dessus le canvas)
+   Palette reprise du jeu : bleu nuit, jaune #ffd23f,
+   orange nitro #ff7a1a, vert départ #22b35e.
+   ========================================================= */
+
+/* Voile plein cadre : opaque, défilable, au-dessus du canvas. */
+#ecrans {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #33455f transparent;
+  padding-top: calc(30px + env(safe-area-inset-top, 0px));
+  padding-right: max(18px, env(safe-area-inset-right, 0px));
+  /* Marge basse généreuse : le clavier virtuel ne doit pas masquer « Continuer ». */
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px));
+  color: #f2f4f8;
+  background-color: #0e1420;
+  background-image:
+    radial-gradient(130% 70% at 50% 0%, rgba(58, 109, 240, 0.18), transparent 62%),
+    radial-gradient(90% 60% at 50% 100%, rgba(255, 122, 26, 0.1), transparent 70%),
+    linear-gradient(180deg, #172232 0%, #0e1420 100%);
+  animation: voile-apparait 0.22s ease-out;
+}
+
+/* Bande damier façon drapeau de course, en haut du voile. */
+#ecrans::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  pointer-events: none;
+  opacity: 0.85;
+  background-color: #e9eef7;
+  background-image:
+    linear-gradient(45deg, #16202f 25%, transparent 25%, transparent 75%, #16202f 75%),
+    linear-gradient(45deg, #16202f 25%, transparent 25%, transparent 75%, #16202f 75%);
+  background-size: 10px 10px;
+  background-position:
+    0 0,
+    5px 5px;
+}
+
+/* Règles de masquage indispensables : le jeu redevient interactif quand
+   #ecrans est caché, et un seul écran est visible à la fois. */
+#ecrans[hidden] {
+  display: none !important;
+}
+
+.ecran[hidden] {
+  display: none !important;
+}
+
+.ecran {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 420px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: ecran-entree 0.28s ease-out;
+}
+
+.ecran :where(input) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ---------- Titres ---------- */
+.ecran h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.4px;
+  color: #fff;
+}
+
+.ecran h2::after {
+  content: '';
+  display: block;
+  width: 54px;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ffd23f, #ff7a1a);
+}
+
+#titreAccueil {
+  font-size: 1.7rem;
+}
+
+#ecranFin h2 {
+  text-align: center;
+}
+
+#ecranFin h2::after {
+  margin-inline: auto;
+}
+
+/* ---------- Accueil : nom du joueur ---------- */
+label[for='nomJoueur'] {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #cfd8e6;
+}
+
+#nomJoueur {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  font-family: inherit;
+  /* 16px minimum : évite le zoom automatique sur iOS. */
+  font-size: 16px;
+  font-weight: 600;
+  color: #f2f4f8;
+  background: #182235;
+  border: 2px solid #2d3b55;
+  border-radius: 12px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+#nomJoueur::placeholder {
+  color: #7f8da6;
+  font-weight: 400;
+}
+
+#nomJoueur:focus {
+  outline: none;
+  background: #1b2740;
+  border-color: #ffd23f;
+  box-shadow: 0 0 0 3px rgba(255, 210, 63, 0.22);
+}
+
+/* Message d'erreur : rouge franc, bien distinct du jaune d'accent. */
+.erreur {
+  margin: -4px 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ff7b7b;
+}
+
+.erreur[hidden] {
+  display: none !important;
+}
+
+/* ---------- Boutons génériques des écrans ---------- */
+.ecran :where(button) {
+  min-height: 48px;
+  padding: 0 20px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    filter 0.15s ease;
+}
+
+.ecran :where(button, input, [tabindex]):focus-visible {
+  outline: 3px solid #ffd23f;
+  outline-offset: 3px;
+}
+
+/* Actions principales (vert départ). */
+#boutonContinuer,
+#boutonLancerMode,
+#boutonRejouer {
+  background: #22b35e;
+  color: #fff;
+  box-shadow: 0 4px 0 #167a3f;
+}
+
+#boutonContinuer {
+  width: 100%;
+  font-size: 1.08rem;
+}
+
+#boutonContinuer:disabled {
+  background: #26344c;
+  color: #8492a8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Actions secondaires (bleu acier). */
+#boutonChangerJoueur,
+#boutonFermerRegles,
+#boutonChangerMode,
+#boutonChangerJoueurFin {
+  background: #1d2941;
+  color: #dbe4f2;
+  border: 2px solid #33455f;
+}
+
+#boutonContinuer:not(:disabled):active,
+#boutonLancerMode:active,
+#boutonRejouer:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #167a3f;
+}
+
+#boutonChangerJoueur:active,
+#boutonFermerRegles:active,
+#boutonChangerMode:active,
+#boutonChangerJoueurFin:active {
+  transform: translateY(2px);
+  background: #26344c;
+}
+
+@media (hover: hover) {
+  #boutonContinuer:not(:disabled):hover,
+  #boutonLancerMode:hover,
+  #boutonRejouer:hover {
+    filter: brightness(1.08);
+  }
+
+  #boutonChangerJoueur:hover,
+  #boutonFermerRegles:hover,
+  #boutonChangerMode:hover,
+  #boutonChangerJoueurFin:hover {
+    background: #26344c;
+    border-color: #46608a;
+  }
+}
+
+/* ---------- Noms récents ---------- */
+.noms-recents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.noms-recents[hidden] {
+  display: none !important;
+}
+
+.noms-recents > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 6px 16px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #dbe4f2;
+  background: #182235;
+  border: 1px solid #2d3b55;
+  border-radius: 999px;
+}
+
+.noms-recents > button {
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.noms-recents > button:active {
+  background: #26344c;
+}
+
+@media (hover: hover) {
+  .noms-recents > button:hover {
+    background: #1e2c46;
+    border-color: #ffd23f;
+  }
+}
+
+/* ---------- Choix du mode : bandeau joueur ---------- */
+.ligne-joueur {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  background: #182235;
+  border: 1px solid #24304a;
+  border-radius: 12px;
+}
+
+#joueurActuel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: #ffd23f;
+}
+
+#boutonChangerJoueur {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+/* ---------- Cartes de mode ---------- */
+.cartes-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Nombre impair de cartes : la dernière (ex. Défi du jour) occupe
+   toute la largeur en portrait. */
+.cartes-modes > .carte-mode:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Le Défi du jour occupe aussi toute la largeur, où qu'il soit placé. */
+.cartes-modes > .carte-mode[data-mode='defi'],
+.cartes-modes > .carte-mode[data-mode='defi-du-jour'],
+.cartes-modes > .carte-mode[data-mode='du-jour'] {
+  grid-column: 1 / -1;
+}
+
+.carte-mode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 14px;
+  text-align: left;
+  color: #f2f4f8;
+  background: linear-gradient(160deg, #1d2a44 0%, #141c2c 100%);
+  border: 2px solid #2b3a56;
+  border-radius: 16px;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+@media (hover: hover) {
+  .carte-mode:not(:disabled):hover {
+    transform: translateY(-2px);
+    border-color: #3a6df0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+.carte-mode:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Contour du dernier mode joué (classe posée par script.js). */
+.carte-mode.selectionne {
+  border-color: #ffd23f;
+  box-shadow:
+    0 0 0 1px #ffd23f,
+    0 8px 22px rgba(255, 210, 63, 0.16);
+}
+
+.carte-mode:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.5);
+  transform: none;
+  box-shadow: none;
+}
+
+.carte-icone {
+  margin-bottom: 2px;
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.carte-nom {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #fff;
+}
+
+.carte-but {
+  font-size: 0.82rem;
+  line-height: 1.25;
+  color: #9fb0c9;
+  overflow-wrap: anywhere;
+}
+
+.carte-record {
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffd23f;
+}
+
+/* Badge « Bientôt » (élément .bientot dans la carte). */
+.carte-mode .bientot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 8px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1a1206;
+  background: #ff9a3c;
+  border-radius: 999px;
+}
+
+/* Variante : la classe .bientot posée directement sur la carte. */
+.carte-mode.bientot {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+/* ---------- Difficulté ---------- */
+.difficultes {
+  margin: 0;
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  background: #141d2e;
+  border: 2px solid #24304a;
+  border-radius: 14px;
+}
+
+.difficultes legend {
+  padding: 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9fb0c9;
+}
+
+.difficultes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 600;
+  color: #dbe4f2;
+  cursor: pointer;
+}
+
+.difficultes input[type='radio'] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: #ffd23f;
+  cursor: pointer;
+}
+
+/* ---------- Modale des règles ---------- */
+.ecran.modale {
+  max-width: 480px;
+  margin: auto;
+  padding: 22px 20px;
+  background: #141d2e;
+  border: 2px solid #2b3a56;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+}
+
+#reglesTexte {
+  margin: 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #cfd8e6;
+}
+
+#reglesTexte li::marker {
+  color: #ffd23f;
+}
+
+.ne-plus-afficher {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.9rem;
+  color: #9fb0c9;
+  cursor: pointer;
+}
+
+.ne-plus-afficher input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: #ffd23f;
+  cursor: pointer;
+}
+
+.actions-modale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.actions-modale > button {
+  flex: 1 1 130px;
+}
+
+/* ---------- Fin de partie ---------- */
+.fin-resultat {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: clamp(2.2rem, 9vw, 3rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  color: #ffd23f;
+  text-shadow: 0 6px 24px rgba(255, 210, 63, 0.25);
+}
+
+.fin-details {
+  margin: 0;
+  text-align: center;
+  font-size: 0.92rem;
+  color: #9fb0c9;
+}
+
+.fin-message {
+  margin: 0;
+  text-align: center;
+  font-weight: 800;
+  color: #3ee37f;
+}
+
+.fin-message:empty {
+  display: none;
+}
+
+.actions-fin {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.actions-fin > button {
+  width: 100%;
+}
+
+/* ---------- Animations ---------- */
+@keyframes voile-apparait {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ecran-entree {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #ecrans,
+  .ecran,
+  .carte-mode,
+  .noms-recents > button,
+  .ecran :where(button),
+  #nomJoueur {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- Adaptation paysage : cartes sur une seule ligne ---------- */
+@media (orientation: landscape) {
+  #ecrans {
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ecran {
+    max-width: 680px;
+  }
+
+  .cartes-modes {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .cartes-modes > .carte-mode:last-child:nth-child(odd),
+  .cartes-modes > .carte-mode[data-mode='defi'],
+  .cartes-modes > .carte-mode[data-mode='defi-du-jour'],
+  .cartes-modes > .carte-mode[data-mode='du-jour'] {
+    grid-column: auto;
+  }
+
+  .carte-mode {
+    min-height: 92px;
+  }
+
+  .actions-fin {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .actions-fin > button {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
+/* ---------- Très petits écrans ---------- */
+@media (max-width: 360px) {
+  #ecrans {
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
+
+  .ecran h2 {
+    font-size: 1.22rem;
+  }
+
+  #titreAccueil {
+    font-size: 1.5rem;
+  }
+
+  .carte-mode {
+    padding: 12px;
+  }
 }

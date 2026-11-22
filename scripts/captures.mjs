@@ -21,6 +21,29 @@ const page = await contexte.newPage();
 await page.goto(URL_JEU);
 await page.waitForFunction(() => window.jeuAris?.banque.pret);
 
+const capturer = async (nom) => {
+  await page.screenshot({ path: `${SORTIE}${nom}.jpg`, type: 'jpeg', quality: 82 });
+  console.log('✓', nom);
+};
+
+// --- Écrans : on parcourt l'interface comme un joueur ---
+await page.evaluate(() => {
+  for (const [cle, valeur] of [
+    ['record.esquive.Léa', '52'],
+    ['nomsJoueurs', JSON.stringify(['Léa', 'Tom', 'Inès'])],
+  ]) {
+    localStorage.setItem(cle, valeur);
+  }
+});
+await page.reload();
+await page.waitForFunction(() => window.jeuAris?.banque.pret);
+await capturer('ecran-accueil');
+await page.fill('#nomJoueur', 'Léa');
+await page.click('#boutonContinuer');
+await capturer('ecran-modes');
+await page.click('.carte-mode[data-mode="esquive"]');
+await capturer('ecran-regles');
+
 // Fige l'animation : on dessine nous-mêmes des états choisis.
 await page.evaluate(() => {
   window.requestAnimationFrame = () => 0;
@@ -28,8 +51,9 @@ await page.evaluate(() => {
 
 const scene = (reglages) =>
   page.evaluate((r) => {
-    const { jeu, rendu, hud, commandes } = window.jeuAris;
-    commandes.demarrer();
+    const { jeu, rendu, hud, boucle } = window.jeuAris;
+    jeu.nomJoueur = 'Léa';
+    boucle.demarrer();
     jeu.phase = 'jeu';
     jeu.message.texte = jeu.mode.messageDepart;
     jeu.obstacles = [];
@@ -47,17 +71,35 @@ const scene = (reglages) =>
     jeu.nitro.actif = Boolean(r.nitroActif);
     for (const [voie, y, sprite] of r.voitures) {
       const o = {
-        voie, x: jeu.route.centreVoie(voie), y, largeur: 48, hauteur: 89, vitesse: 0, vx: 0,
-        angle: 0, rotation: 0, accidente: false, compte: false, ecartMin: Infinity, phase: 1,
-        sprite, couleurSecours: 'royalblue',
+        voie,
+        x: jeu.route.centreVoie(voie),
+        y,
+        largeur: 48,
+        hauteur: 89,
+        vitesse: 0,
+        vx: 0,
+        angle: 0,
+        rotation: 0,
+        accidente: false,
+        compte: false,
+        ecartMin: Infinity,
+        phase: 1,
+        sprite,
+        couleurSecours: 'royalblue',
       };
       jeu.obstacles.push(o);
     }
     if (r.particules) {
       for (let i = 0; i < 140; i++) {
         jeu.particules.push({
-          type: 'goutte', x: Math.random() * 380 - 10, y: Math.random() * 540, vx: -60, vy: 900,
-          vie: 0.8, age: Math.random() * 0.5, taille: 14 + Math.random() * 10,
+          type: 'goutte',
+          x: Math.random() * 380 - 10,
+          y: Math.random() * 540,
+          vx: -60,
+          vy: 900,
+          vie: 0.8,
+          age: Math.random() * 0.5,
+          taille: 14 + Math.random() * 10,
         });
       }
     }
@@ -65,27 +107,58 @@ const scene = (reglages) =>
     hud.rafraichir(jeu);
   }, reglages);
 
-const capturer = async (nom) => {
-  await page.screenshot({ path: `${SORTIE}${nom}.jpg`, type: 'jpeg', quality: 82 });
-  console.log('✓', nom);
-};
-
 await scene({
-  voie: 1, score: 42, serie: 12, nitro: 0.7,
-  voitures: [[0, 60, 'voiture-verte'], [2, 210, 'voiture-jaune'], [1, -30, 'voiture-bleue']],
+  voie: 1,
+  score: 42,
+  serie: 12,
+  nitro: 0.7,
+  voitures: [
+    [0, 60, 'voiture-verte'],
+    [2, 210, 'voiture-jaune'],
+    [1, -30, 'voiture-bleue'],
+  ],
 });
 await capturer('jeu-jour');
 
 await scene({
-  voie: 2, score: 58, serie: 21, nitro: 1, defilement: 3600 * 20 * 0.55,
-  voitures: [[0, 120, 'voiture-bleue'], [1, 10, 'voiture-verte']],
+  voie: 2,
+  score: 58,
+  serie: 21,
+  nitro: 1,
+  defilement: 3600 * 20 * 0.55,
+  voitures: [
+    [0, 120, 'voiture-bleue'],
+    [1, 10, 'voiture-verte'],
+  ],
 });
 await capturer('jeu-nuit');
 
 await scene({
-  voie: 1, score: 31, serie: 6, meteo: 'pluie', annonce: 1.8, particules: true,
-  voitures: [[0, 140, 'voiture-jaune'], [2, 40, 'voiture-verte']],
+  voie: 1,
+  score: 31,
+  serie: 6,
+  meteo: 'pluie',
+  annonce: 1.8,
+  particules: true,
+  voitures: [
+    [0, 140, 'voiture-jaune'],
+    [2, 40, 'voiture-verte'],
+  ],
 });
 await capturer('jeu-pluie');
+
+// Écran de fin
+await page.evaluate(() => {
+  const { jeu } = window.jeuAris;
+  jeu.score = 61;
+  jeu.multiplicateurMax = 4;
+  jeu.nbFrolements = 3;
+  jeu.defilement = 20 * 1480;
+  jeu.mode.verifierFin = undefined;
+  window.jeuAris.jeu.phase = 'accident';
+  import('/src/etat/phases.js').then(({ terminerPartie }) => terminerPartie(jeu));
+});
+await page.waitForTimeout(300);
+await capturer('ecran-fin');
 
 await navigateur.close();
