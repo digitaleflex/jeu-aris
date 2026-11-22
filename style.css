@@ -946,3 +946,129 @@ label[for="nomJoueur"] {
     padding: 12px;
   }
 }
+
+/* ---------- Classements (issue #26) ---------- */
+.ligne-classement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.bouton-trophee {
+  flex: 0 0 auto;
+  min-width: 52px;
+  min-height: 48px;
+  font-size: 1.4rem;
+  border-radius: 12px;
+}
+
+.classement-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.classement-modes > button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.classement-modes > button.selectionne {
+  outline: 2px solid #ffd23f;
+}
+
+.classement-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.classement-liste > li {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.9rem;
+}
+
+.classement-liste > li.moi {
+  background: rgba(255, 210, 63, 0.16);
+  outline: 1px solid #ffd23f;
+}
+
+.classement-rang {
+  font-weight: 900;
+  color: #ffd23f;
+}
+
+.classement-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classement-valeur {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.classement-meta {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.classement-vide {
+  text-align: center;
+  opacity: 0.8;
+}
+
+.actions-classement {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.confirmation-effacement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #ff7a1a;
+  border-radius: 10px;
+  background: rgba(255, 122, 26, 0.1);
+}
+
+.confirmation-effacement[hidden],
+.classement-vide[hidden] {
+  display: none !important;
+}
+
+.confirmation-effacement p {
+  margin: 0;
+  text-align: center;
+}
+
+#boutonEffacerScores,
+#boutonAnnulerEffacement {
+  min-height: 48px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .classement-liste {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

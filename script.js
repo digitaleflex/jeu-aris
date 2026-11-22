@@ -57,6 +57,17 @@ const boutonRejouer = document.getElementById("boutonRejouer");
 const boutonChangerMode = document.getElementById("boutonChangerMode");
 const boutonChangerJoueurFin = document.getElementById("boutonChangerJoueurFin");
 const boutonCopierDefi = document.getElementById("boutonCopierDefi");
+const ecranClassement = document.getElementById("ecranClassement");
+const classementTitre = document.getElementById("classementTitre");
+const classementModes = document.getElementById("classementModes");
+const classementListe = document.getElementById("classementListe");
+const classementVide = document.getElementById("classementVide");
+const boutonClassement = document.getElementById("boutonClassement");
+const boutonEffacerScores = document.getElementById("boutonEffacerScores");
+const confirmationEffacement = document.getElementById("confirmationEffacement");
+const boutonConfirmerEffacement = document.getElementById("boutonConfirmerEffacement");
+const boutonAnnulerEffacement = document.getElementById("boutonAnnulerEffacement");
+const boutonRetourClassement = document.getElementById("boutonRetourClassement");
 const radiosDifficulte = document.querySelectorAll('input[name="difficulte"]');
 
 
@@ -1010,28 +1021,182 @@ function saisieActive() {
 }
 
 function afficherEcran(nom) {
-  const cibles = { accueil: ecranAccueil, choixMode: ecranChoixMode, regles: ecranRegles, fin: ecranFin };
+  const cibles = {
+    accueil: ecranAccueil,
+    choixMode: ecranChoixMode,
+    regles: ecranRegles,
+    fin: ecranFin,
+    classement: ecranClassement
+  };
   const cible = cibles[nom] || null;
-  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin].forEach(function (ecran) {
+  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin, ecranClassement].forEach(function (ecran) {
     if (ecran) ecran.hidden = ecran !== cible;
   });
   if (ecrans) ecrans.hidden = cible === null;
   // L'écran s'appelle « fin », l'état de la machine s'appelle « fini »
   if (nom === "fin") etat = "fini";
-  else if (nom !== "regles") etat = nom;
+  else if (nom !== "regles" && nom !== "classement") etat = nom;
 }
 
 function masquerEcrans() {
   // Évite qu'un bouton caché garde le focus (Espace/Entrée pendant la partie)
   const actif = document.activeElement;
   if (actif && actif !== document.body && typeof actif.blur === "function") actif.blur();
-  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin].forEach(function (ecran) {
+  [ecranAccueil, ecranChoixMode, ecranRegles, ecranFin, ecranClassement].forEach(function (ecran) {
     if (ecran) ecran.hidden = true;
   });
   if (ecrans) ecrans.hidden = true;
 }
 
 // Format lisible mm:ss,centièmes pour les records de temps.
+/* ---------- Classements par mode (issue #26) ----------
+   Une clé localStorage par mode, un top 10, tri selon la règle du mode. */
+let classementRetour = "choixMode";
+let classementMode = "esquive";
+
+function cleClassement(mode) {
+  return "classement." + mode;
+}
+
+function lireClassement(mode) {
+  try {
+    const donnees = JSON.parse(lireStockage(cleClassement(mode), "[]"));
+    if (!Array.isArray(donnees)) return [];
+    return donnees.filter(function (e) {
+      return e && typeof e.nom === "string" && typeof e.valeur === "number" && isFinite(e.valeur);
+    }).slice(0, 10);
+  } catch (e) {
+    return []; // stockage indisponible ou données corrompues
+  }
+}
+
+function ecrireClassement(mode, liste) {
+  ecrireStockage(cleClassement(mode), JSON.stringify(liste.slice(0, 10)));
+}
+
+function normaliserNom(nom) {
+  return (nom || "").trim().toLocaleLowerCase("fr");
+}
+
+function estMeilleur(mode, candidat, existing) {
+  if (mode === "course") {
+    if (candidat.valeur !== existing.valeur) return candidat.valeur < existing.valeur;
+    return (candidat.temps || Infinity) < (existing.temps || Infinity);
+  }
+  return candidat.valeur > existing.valeur; // points (Esquive, Défi) ou distance (Chrono)
+}
+
+function comparateurClassement(mode) {
+  return function (a, b) {
+    if (mode === "course") {
+      return a.valeur - b.valeur || (a.temps || 0) - (b.temps || 0);
+    }
+    return b.valeur - a.valeur;
+  };
+}
+
+function ajouterAuClassement(mode, entree) {
+  if (mode === "zen" || !entree) return 0; // aucun record en Zen
+  const liste = lireClassement(mode);
+  const cle = normaliserNom(entree.nom);
+  const index = liste.findIndex(function (e) { return normaliserNom(e.nom) === cle; });
+  if (index >= 0) {
+    if (!estMeilleur(mode, entree, liste[index])) {
+      return liste.findIndex(function (e) { return normaliserNom(e.nom) === cle; }) + 1;
+    }
+    liste[index] = entree;
+  } else {
+    liste.push(entree);
+  }
+  liste.sort(comparateurClassement(mode));
+  const top = liste.slice(0, 10);
+  ecrireClassement(mode, top);
+  return top.findIndex(function (e) { return normaliserNom(e.nom) === cle; }) + 1;
+}
+
+function nouvelleEntreeClassement(valeur, temps) {
+  const entree = {
+    nom: nomJoueur,
+    valeur: valeur,
+    date: new Date().toLocaleDateString("fr-FR"),
+    meteo: METEOS[meteo.actuelle].nom
+  };
+  if (temps !== undefined) entree.temps = temps;
+  return entree;
+}
+
+function enregistrerClassement(mode) {
+  if (!nomJoueur) return 0;
+  if (mode === "course" && course) {
+    return ajouterAuClassement(mode, nouvelleEntreeClassement(course.position, course.temps + course.penalty));
+  }
+  if (mode === "chrono") {
+    return ajouterAuClassement(mode, nouvelleEntreeClassement(Math.round(defilement / PX_PAR_METRE)));
+  }
+  if (mode === "zen") return 0;
+  return ajouterAuClassement(mode, nouvelleEntreeClassement(Math.round(score)));
+}
+
+function formatValeurClassement(mode, entree) {
+  if (mode === "course") return entree.valeur + (entree.valeur === 1 ? "er" : "e") + " · " + formatTemps(entree.temps);
+  if (mode === "chrono") return entree.valeur + " m";
+  return entree.valeur + " pts";
+}
+
+function afficherClassement(mode) {
+  if (!MODES[mode]) return;
+  classementMode = mode;
+  if (classementTitre) classementTitre.textContent = "🏆 Classement — " + MODES[mode].nom;
+  if (classementModes) {
+    classementModes.textContent = "";
+    for (const cle in MODES) {
+      if (!Object.prototype.hasOwnProperty.call(MODES, cle)) continue;
+      const bouton = document.createElement("button");
+      bouton.type = "button";
+      bouton.textContent = MODES[cle].nom;
+      if (cle === mode) bouton.classList.add("selectionne");
+      bouton.addEventListener("click", function () { afficherClassement(cle); });
+      classementModes.appendChild(bouton);
+    }
+  }
+  const liste = lireClassement(mode);
+  if (classementVide) classementVide.hidden = liste.length > 0;
+  if (classementListe) {
+    classementListe.textContent = "";
+    liste.forEach(function (entree, i) {
+      const li = document.createElement("li");
+      if (normaliserNom(entree.nom) === normaliserNom(nomJoueur)) li.classList.add("moi");
+      const rang = document.createElement("span");
+      rang.className = "classement-rang";
+      rang.textContent = (i + 1) + ".";
+      const nomEtMeta = document.createElement("span");
+      const nom = document.createElement("span");
+      nom.className = "classement-nom";
+      nom.textContent = entree.nom;
+      const meta = document.createElement("span");
+      meta.className = "classement-meta";
+      meta.textContent = "  " + (entree.date || "") + " · " + (entree.meteo || "");
+      nomEtMeta.appendChild(nom);
+      nomEtMeta.appendChild(meta);
+      const valeur = document.createElement("span");
+      valeur.className = "classement-valeur";
+      valeur.textContent = formatValeurClassement(mode, entree);
+      li.appendChild(rang);
+      li.appendChild(nomEtMeta);
+      li.appendChild(valeur);
+      classementListe.appendChild(li);
+    });
+  }
+  if (confirmationEffacement) confirmationEffacement.hidden = true;
+  classementRetour = etat === "fini" ? "fin" : "choixMode";
+  afficherEcran("classement");
+}
+
+function fermerClassement() {
+  if (classementRetour === "fin") afficherEcran("fin");
+  else afficherChoixMode();
+}
+
 function formatTemps(secondes) {
   if (!secondes || secondes <= 0) return "—";
   const total = Math.round(secondes * 100);
@@ -1082,6 +1247,10 @@ function terminerCourse() {
     finMessage.textContent = nouveauRecord
       ? "Bravo " + nomJoueur + ", nouveau record !"
       : "Meilleur temps : " + formatTemps(ancien);
+  }
+  const rang = enregistrerClassement("course");
+  if (rang > 0 && finMessage) {
+    finMessage.textContent += " Tu es " + rang + (rang === 1 ? "er" : "e") + " du classement !";
   }
   afficherMessage("Course terminée — " + course.position + (course.position === 1 ? "er" : "e") + " place !");
   afficherEcran("fin");
@@ -1886,6 +2055,13 @@ document.addEventListener("keydown", function (evenement) {
 
   // Un écran HTML est ouvert : navigation seulement, aucune commande de jeu
   if (interfaceOuverte()) {
+    if (ecranClassement && !ecranClassement.hidden) {
+      if (touche === "Escape") {
+        evenement.preventDefault();
+        fermerClassement();
+      }
+      return;
+    }
     const reglesOuvertes = ecranRegles !== null && !ecranRegles.hidden;
     if (touche === "Escape") {
       evenement.preventDefault();
@@ -3457,7 +3633,11 @@ function terminerPartie() {
     afficherMessage("Partie terminée — score : " + score + ".");
   }
 
+  const rang = enregistrerClassement(modeActuel);
   remplirEcranFin(ancienRecord);
+  if (rang > 0 && finMessage) {
+    finMessage.textContent += " Tu es " + rang + (rang === 1 ? "er" : "e") + " du classement !";
+  }
   afficherEcran("fin");
   if (boutonRejouer) boutonRejouer.focus();
 }
@@ -3512,6 +3692,27 @@ function initialiserInterface() {
       } catch (e) {
         afficherMessage("Résultat à copier : " + texte);
       }
+    });
+  }
+  if (boutonClassement) {
+    boutonClassement.addEventListener("click", function () { afficherClassement(modeActuel); });
+  }
+  if (boutonRetourClassement) boutonRetourClassement.addEventListener("click", fermerClassement);
+  if (boutonEffacerScores) {
+    boutonEffacerScores.addEventListener("click", function () {
+      if (confirmationEffacement) confirmationEffacement.hidden = false;
+    });
+  }
+  if (boutonAnnulerEffacement) {
+    boutonAnnulerEffacement.addEventListener("click", function () {
+      if (confirmationEffacement) confirmationEffacement.hidden = true;
+    });
+  }
+  if (boutonConfirmerEffacement) {
+    boutonConfirmerEffacement.addEventListener("click", function () {
+      ecrireClassement(classementMode, []);
+      if (confirmationEffacement) confirmationEffacement.hidden = true;
+      afficherClassement(classementMode);
     });
   }
   if (boutonRejouer) boutonRejouer.addEventListener("click", rejouer);

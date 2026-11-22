@@ -144,10 +144,19 @@ DÉFI DU JOUR
     defi.<date>.<nom> ; les suivantes sont des entraînements.
   - Écran de fin « Défi du 22/11 : 47 points » avec bouton Copier le résultat.
 
+CLASSEMENTS
+  Bouton 🏆 sur l'écran de choix du mode. Un top 10 par mode, stocké dans
+  classement.<mode> (JSON protégé, valeurs par défaut si corrompu).
+  Tri : plus de points (Esquive, Défi), meilleure place puis meilleur temps
+  (Course), plus grande distance (Chrono). Zen n'enregistre rien.
+  Un même nom avec une casse différente compte comme un seul joueur.
+  Chaque ligne affiche le rang, le nom, la date et la météo. « Effacer mes
+  scores » demande confirmation dans la page (pas de fenêtre native).
+
 TESTS
-  node tests/verification.mjs  → 20 vérifications headless (parcours complet,
+  node tests/verification.mjs  → 23 vérifications headless (parcours complet,
   records, difficulté, boucle unique, grille de course, 60 s de rivaux sans
-  accident, checkpoints Chrono, limites Zen et stabilité de la graine du jour).
+  accident, checkpoints Chrono, limites Zen, graine du jour et classements).
 
 PHYSIQUE UTILISÉE (échelle : 20 px = 1 m)
   - Moteur : m·a = F_moteur − F_traînée − F_roulement,

@@ -19,7 +19,6 @@ function creerElement(id = '', tag = 'div') {
     disabled: false,
     checked: false,
     value: '',
-    textContent: '',
     innerHTML: '',
     style: {},
     dataset: {},
@@ -113,6 +112,16 @@ function creerElement(id = '', tag = 'div') {
       return { x: 0, y: 0, width: 360, height: 540, top: 0, left: 0, right: 360, bottom: 540 };
     },
   };
+  let texteInterne = '';
+  Object.defineProperty(el, 'textContent', {
+    get() { return texteInterne; },
+    set(v) {
+      texteInterne = v === null || v === undefined ? '' : String(v);
+      el.children.length = 0; // le DOM réel vide les enfants aussi
+    },
+    enumerable: true,
+    configurable: true,
+  });
   return el;
 }
 
@@ -316,6 +325,10 @@ const sonde = `
   MODES: typeof MODES === 'undefined' ? null : MODES,
   DIFFICULTES: typeof DIFFICULTES === 'undefined' ? null : DIFFICULTES,
   lireRecord: typeof lireRecord === 'undefined' ? null : lireRecord,
+  lireClassement: typeof lireClassement === 'undefined' ? null : lireClassement,
+  ajouterAuClassement: typeof ajouterAuClassement === 'undefined' ? null : ajouterAuClassement,
+  afficherClassement: typeof afficherClassement === 'undefined' ? null : afficherClassement,
+  normaliserNom: typeof normaliserNom === 'undefined' ? null : normaliserNom,
   migrerAncienRecord: typeof migrerAncienRecord === 'undefined' ? null : migrerAncienRecord,
   terminerPartie: typeof terminerPartie === 'undefined' ? null : terminerPartie,
   demarrerMode: typeof demarrerMode === 'undefined' ? null : demarrerMode,
@@ -516,6 +529,46 @@ verifier('Défi du jour : graine stable = même route', () => {
   const tire = Array.from({ length: 24 }, () => t.aleatoire());
   const reference = t.mulberry32(t.graineDuJour());
   assert.equal(tire.join(','), Array.from({ length: 24 }, () => reference()).join(','));
+});
+
+verifier('Classement : tri, casse du nom et meilleur score conservé', () => {
+  stockage.delete('classement.esquive');
+  t.ajouterAuClassement('esquive', { nom: 'Léa', valeur: 30, date: '01/01/2026', meteo: 'ROUTE SÈCHE' });
+  t.ajouterAuClassement('esquive', { nom: 'léa', valeur: 50, date: '02/01/2026', meteo: 'PLUIE' });
+  t.ajouterAuClassement('esquive', { nom: 'Tom', valeur: 40, date: '03/01/2026', meteo: 'ROUTE SÈCHE' });
+  const liste = t.lireClassement('esquive');
+  assert.equal(liste.length, 2, 'léa et Léa doivent compter pour un seul joueur');
+  assert.equal(liste[0].nom, 'léa');
+  assert.equal(liste[0].valeur, 50);
+  assert.equal(liste[1].valeur, 40);
+  // un score plus faible ne remplace pas le meilleur
+  t.ajouterAuClassement('esquive', { nom: 'LÉA', valeur: 10, date: '04/01/2026', meteo: 'VERGLAS' });
+  assert.equal(t.lireClassement('esquive').length, 2);
+  assert.equal(t.lireClassement('esquive')[0].valeur, 50);
+});
+verifier('Classement : Course se trie par place puis par temps', () => {
+  stockage.delete('classement.course');
+  t.ajouterAuClassement('course', { nom: 'Tom', valeur: 3, temps: 90, date: '01/01/2026', meteo: 'PLUIE' });
+  t.ajouterAuClassement('course', { nom: 'Léa', valeur: 2, temps: 92, date: '01/01/2026', meteo: 'PLUIE' });
+  t.ajouterAuClassement('course', { nom: 'Inès', valeur: 2, temps: 88, date: '01/01/2026', meteo: 'PLUIE' });
+  const liste = t.lireClassement('course');
+  assert.equal(liste[0].nom, 'Inès');
+  assert.equal(liste[1].nom, 'Léa');
+  assert.equal(liste[2].nom, 'Tom');
+});
+verifier('Classement : ouverture, confirmation et effacement', () => {
+  t.afficherClassement('esquive');
+  assert.equal($('ecranClassement').hidden, false);
+  assert.ok($('classementListe').children.length > 0);
+  $('boutonEffacerScores').dispatch('click');
+  assert.equal($('confirmationEffacement').hidden, false);
+  $('boutonAnnulerEffacement').dispatch('click');
+  assert.equal($('confirmationEffacement').hidden, true);
+  $('boutonEffacerScores').dispatch('click');
+  $('boutonConfirmerEffacement').dispatch('click');
+  assert.equal(t.lireClassement('esquive').length, 0);
+  $('boutonRetourClassement').dispatch('click');
+  assert.equal($('ecranClassement').hidden, true);
 });
 
 console.log(`${reussites} vérification(s) réussie(s)`);

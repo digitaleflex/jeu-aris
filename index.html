@@ -51,7 +51,10 @@
           <span id="joueurActuel">Salut Léa !</span>
           <button id="boutonChangerJoueur" type="button">changer ✎</button>
         </div>
-        <h2 id="titreChoixMode">Choisis ton mode de jeu</h2>
+        <div class="ligne-classement">
+          <h2 id="titreChoixMode">Choisis ton mode de jeu</h2>
+          <button id="boutonClassement" class="bouton-trophee" type="button" aria-label="Voir les classements">🏆</button>
+        </div>
         <div id="cartesModes" class="cartes-modes"></div>
         <fieldset class="difficultes">
           <legend>Difficulté</legend>
@@ -81,6 +84,22 @@
           <button id="boutonChangerMode" type="button">Changer de mode</button>
           <button id="boutonChangerJoueurFin" type="button">Changer de joueur</button>
           <button id="boutonCopierDefi" type="button" hidden>Copier le résultat</button>
+        </div>
+      </section>
+
+      <section id="ecranClassement" class="ecran" hidden aria-labelledby="classementTitre">
+        <h2 id="classementTitre">Classement</h2>
+        <div id="classementModes" class="classement-modes"></div>
+        <ol id="classementListe" class="classement-liste"></ol>
+        <p id="classementVide" class="classement-vide" hidden>Aucun score pour ce mode.</p>
+        <div class="actions-classement">
+          <button id="boutonEffacerScores" type="button">Effacer mes scores</button>
+          <div id="confirmationEffacement" class="confirmation-effacement" hidden>
+            <p>Effacer le classement de ce mode ?</p>
+            <button id="boutonConfirmerEffacement" type="button">Oui, effacer</button>
+            <button id="boutonAnnulerEffacement" type="button">Annuler</button>
+          </div>
+          <button id="boutonRetourClassement" type="button">Retour</button>
         </div>
       </section>
     </div>
